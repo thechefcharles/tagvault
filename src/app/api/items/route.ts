@@ -5,6 +5,7 @@ import { listItems, createItem } from '@/lib/db/items';
 import { createItemSchema } from '@/lib/db/validators';
 import { checkRateLimit } from '@/lib/api/rate-limit';
 import { apiError } from '@/lib/api/response';
+import { assertWithinLimits, incrementUsage, EntitlementError } from '@/lib/entitlements';
 
 export async function GET(request: Request) {
   try {
@@ -60,14 +61,31 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Use /api/items/upload for file items' }, { status: 400 });
     }
 
+    try {
+      await assertWithinLimits({ userId: user.id, action: 'items_create' });
+      await assertWithinLimits({ userId: user.id, action: 'embeddings_enqueue' });
+    } catch (e) {
+      if (e instanceof EntitlementError) {
+        return apiError('PLAN_LIMIT_EXCEEDED', e.message, undefined, 402);
+      }
+      throw e;
+    }
+
     const item = await createItem({
       userId: user.id,
       payload: parsed.data,
     });
+
+    await incrementUsage({ userId: user.id, action: 'items_create' });
+    await incrementUsage({ userId: user.id, action: 'embeddings_enqueue' });
+
     return NextResponse.json(item);
   } catch (err) {
     if (err instanceof Error && err.message === 'Unauthenticated') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    if (err instanceof EntitlementError) {
+      return apiError('PLAN_LIMIT_EXCEEDED', err.message, undefined, 402);
     }
     Sentry.captureException(err);
     const msg = err instanceof Error ? err.message : 'Internal error';

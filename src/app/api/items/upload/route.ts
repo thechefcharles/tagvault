@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { requireUser } from '@/lib/server/auth';
 import { checkRateLimit } from '@/lib/api/rate-limit';
 import { apiError } from '@/lib/api/response';
+import { assertWithinLimits, incrementUsage, EntitlementError } from '@/lib/entitlements';
 import { createClient } from '@/lib/supabase/server';
 import { VAULT_BUCKET } from '@/lib/storage/constants';
 
@@ -42,6 +43,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'File size must not exceed 50MB' }, { status: 400 });
     }
 
+    try {
+      await assertWithinLimits({ userId: user.id, action: 'items_create' });
+      await assertWithinLimits({ userId: user.id, action: 'embeddings_enqueue' });
+    } catch (e) {
+      if (e instanceof EntitlementError) {
+        return apiError('PLAN_LIMIT_EXCEEDED', e.message, undefined, 402);
+      }
+      throw e;
+    }
+
     const supabase = await createClient();
     const db = await import('@/lib/db/items');
     const item = await db.createItem({
@@ -78,10 +89,16 @@ export async function POST(request: Request) {
       title: title?.trim() || null,
     });
 
+    await incrementUsage({ userId: user.id, action: 'items_create' });
+    await incrementUsage({ userId: user.id, action: 'embeddings_enqueue' });
+
     return NextResponse.json(updated);
   } catch (err) {
     if (err instanceof Error && err.message === 'Unauthenticated') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    if (err instanceof EntitlementError) {
+      return apiError('PLAN_LIMIT_EXCEEDED', err.message, undefined, 402);
     }
     Sentry.captureException(err);
     return NextResponse.json(

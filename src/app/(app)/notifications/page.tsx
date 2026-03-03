@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { LogoutButton } from '@/components/LogoutButton';
+import { ManageBillingButton } from '@/app/billing/success/ManageBillingButton';
 import { NotificationBell } from '@/components/NotificationBell';
 
 type Notification = {
@@ -68,6 +69,7 @@ export default function NotificationsPage() {
         </Link>
         <div className="flex items-center gap-2">
           <NotificationBell />
+          <ManageBillingButton />
           {unreadCount > 0 && (
             <button
               type="button"

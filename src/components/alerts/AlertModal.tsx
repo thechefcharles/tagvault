@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
+import { getErrorMessage } from '@/lib/api/parse-error';
 import type { SavedSearch } from '@/types/saved-search';
 
 export type Alert = {
@@ -44,6 +46,7 @@ export function AlertModal({
   const [enabled, setEnabled] = useState(true);
   const [notifyOnNew, setNotifyOnNew] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isPlanLimit, setIsPlanLimit] = useState(false);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -61,6 +64,7 @@ export function AlertModal({
       setNotifyOnNew(true);
     }
     setError(null);
+    setIsPlanLimit(false);
   }, [initial, savedSearches, presetSavedSearchId, open]);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -86,7 +90,10 @@ export function AlertModal({
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data.error ?? 'Failed to save');
+        setError(getErrorMessage(data, 'Failed to save'));
+        setIsPlanLimit(res.status === 402);
+        setLoading(false);
+        return;
       }
       onSave();
       onClose();
@@ -176,7 +183,19 @@ export function AlertModal({
               Notify when new items match
             </label>
           </div>
-          {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+          {error && (
+            <div>
+              <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+              {isPlanLimit && (
+                <Link
+                  href="/pricing"
+                  className="mt-2 inline-block text-sm font-medium underline"
+                >
+                  Upgrade to Pro →
+                </Link>
+              )}
+            </div>
+          )}
           <div className="flex justify-end gap-2 pt-2">
             <button
               type="button"

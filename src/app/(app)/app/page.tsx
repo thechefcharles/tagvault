@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getCurrentUser } from '@/lib/server/auth';
 import { LogoutButton } from '@/components/LogoutButton';
+import { ManageBillingButton } from '@/app/billing/success/ManageBillingButton';
 import { NotificationBell } from '@/components/NotificationBell';
 import { listItems } from '@/lib/db/items';
 import { VaultClient } from './VaultClient';
@@ -35,6 +36,7 @@ export default async function AppPage({
         <h1 className="text-xl font-semibold">Vault</h1>
         <div className="flex items-center gap-2">
           <NotificationBell />
+          <ManageBillingButton />
           <LogoutButton />
         </div>
       </header>

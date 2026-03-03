@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { LogoutButton } from '@/components/LogoutButton';
+import { ManageBillingButton } from '@/app/billing/success/ManageBillingButton';
 import { NotificationBell } from '@/components/NotificationBell';
 import { AlertModal, type Alert } from '@/components/alerts/AlertModal';
 import type { SavedSearch } from '@/types/saved-search';
@@ -73,6 +74,7 @@ export default function AlertsPage() {
         </Link>
         <div className="flex items-center gap-2">
           <NotificationBell />
+          <ManageBillingButton />
           <LogoutButton />
         </div>
       </header>

@@ -1,6 +1,8 @@
 import * as Sentry from '@sentry/nextjs';
 import { NextResponse } from 'next/server';
 import { requireUser } from '@/lib/server/auth';
+import { apiError } from '@/lib/api/response';
+import { assertWithinLimits, incrementUsage, EntitlementError } from '@/lib/entitlements';
 import { createClient } from '@/lib/supabase/server';
 import { z } from 'zod';
 
@@ -52,6 +54,15 @@ export async function POST(request: Request) {
       );
     }
 
+    try {
+      await assertWithinLimits({ userId: user.id, action: 'saved_searches_create' });
+    } catch (e) {
+      if (e instanceof EntitlementError) {
+        return apiError('PLAN_LIMIT_EXCEEDED', e.message, undefined, 402);
+      }
+      throw e;
+    }
+
     const supabase = await createClient();
     const { data, error } = await supabase
       .from('saved_searches')
@@ -69,10 +80,15 @@ export async function POST(request: Request) {
       .single();
 
     if (error) throw error;
+
+    await incrementUsage({ userId: user.id, action: 'saved_searches_create' });
     return NextResponse.json(data);
   } catch (err) {
     if (err instanceof Error && err.message === 'Unauthenticated') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    if (err instanceof EntitlementError) {
+      return apiError('PLAN_LIMIT_EXCEEDED', err.message, undefined, 402);
     }
     Sentry.captureException(err);
     return NextResponse.json(

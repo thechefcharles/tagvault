@@ -135,6 +135,31 @@ The app was built through **Cursor Prompts 01–08** (Phases 1–8) and implemen
 
 ---
 
+## Phase 8A — Entitlements + Usage Limits
+
+| Criteria | Status |
+|----------|--------|
+| plan enum (free, pro) | ✅ |
+| user_entitlements table + RLS | ✅ |
+| usage_counters table + RLS | ✅ |
+| Default provisioning for new users | ✅ (trigger on profiles insert) |
+| Limits in src/lib/entitlements/limits.ts | ✅ |
+| Enforce: items, upload, saved-searches, alerts, search | ✅ |
+| Enforce: embeddings (at item create/update) | ✅ |
+| 402 + PLAN_LIMIT_EXCEEDED on breach | ✅ |
+| UI surfaces error (getErrorMessage) | ✅ |
+
+### Ship Criteria (Phase 8A)
+
+- [ ] Create two users; each has user_entitlements row
+- [ ] Create 101 items → 101st blocked with clear message
+- [ ] Create 6 saved searches → 6th blocked
+- [ ] Create 3 alerts → 3rd blocked
+- [ ] Run >50 searches in a day → blocked
+- [ ] Set plan=pro in DB → limits bypassed
+
+---
+
 ## Gaps to Address
 
 ### 1. Middleware: protect `/alerts` and `/notifications` — ✅ Done

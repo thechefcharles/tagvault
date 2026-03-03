@@ -7,6 +7,7 @@ export type ApiErrorCode =
   | 'NOT_FOUND'
   | 'VALIDATION_ERROR'
   | 'RATE_LIMITED'
+  | 'PLAN_LIMIT_EXCEEDED'
   | 'INTERNAL_ERROR';
 
 export function apiOk<T extends Record<string, unknown>>(data: T, init?: ResponseInit) {
