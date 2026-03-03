@@ -25,7 +25,20 @@ export async function updateSession(request: NextRequest) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
+  const isProtected =
+    pathname.startsWith('/app') ||
+    pathname === '/search' ||
+    pathname.startsWith('/saved-searches') ||
+    pathname.startsWith('/alerts') ||
+    pathname.startsWith('/notifications');
+
   if (!supabaseUrl || !supabaseAnonKey) {
+    // Env may be missing in Edge; redirect protected routes to login to avoid "Unauthenticated" throw
+    if (isProtected) {
+      const url = request.nextUrl.clone();
+      url.pathname = '/login';
+      return NextResponse.redirect(url);
+    }
     return response;
   }
 
@@ -49,14 +62,7 @@ export async function updateSession(request: NextRequest) {
     // Supabase auth failed (e.g. network); treat as unauthenticated
   }
 
-  if (
-    (pathname.startsWith('/app') ||
-      pathname === '/search' ||
-      pathname.startsWith('/saved-searches') ||
-      pathname.startsWith('/alerts') ||
-      pathname.startsWith('/notifications')) &&
-    !user
-  ) {
+  if (isProtected && !user) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
     return NextResponse.redirect(url);
