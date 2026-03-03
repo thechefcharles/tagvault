@@ -30,9 +30,7 @@ function validate() {
 
   if (missing.length > 0) {
     const msg = `Missing required env vars: ${missing.join(', ')}`;
-    if (isProd) {
-      throw new Error(msg);
-    }
+    // Log instead of throw to avoid blocking app startup; API routes will still fail with clear errors
     console.error(`[env] ${msg}`);
   }
 
