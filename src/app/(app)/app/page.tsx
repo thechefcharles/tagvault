@@ -1,32 +1,32 @@
+import Link from "next/link";
 import { requireUser } from "@/lib/server/auth";
 import { LogoutButton } from "@/components/LogoutButton";
-import { listItems } from "@/lib/db/items";
+import { searchItemsHybrid } from "@/lib/db/search-hybrid";
 import { VaultClient } from "./VaultClient";
 
-export default async function AppPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ type?: string; sort?: string }>;
-}) {
+export default async function AppPage() {
   const user = await requireUser();
-  const params = await searchParams;
-  const type = params.type as "link" | "file" | "note" | undefined;
-  const sort = (params.sort as "recent" | "priority") || "recent";
-
-  const items = await listItems({
+  const initialItems = await searchItemsHybrid({
     userId: user.id,
-    type,
-    sort,
+    q: "",
+    type: "all",
+    sort: "best_match",
+    queryEmbedding: null,
   });
 
   return (
     <div className="min-h-screen p-6">
       <header className="max-w-2xl mx-auto flex justify-between items-center">
-        <h1 className="text-xl font-semibold">Vault</h1>
+        <div className="flex items-center gap-4">
+          <h1 className="text-xl font-semibold">Vault</h1>
+          <Link href="/search" className="text-sm text-neutral-600 hover:text-foreground dark:text-neutral-400">
+            Search
+          </Link>
+        </div>
         <LogoutButton />
       </header>
       <main className="max-w-2xl mx-auto mt-6">
-        <VaultClient items={items} />
+        <VaultClient initialItems={initialItems} />
       </main>
     </div>
   );

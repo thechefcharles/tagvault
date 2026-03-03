@@ -13,3 +13,5 @@ export type Item = {
   created_at: string;
   updated_at: string;
 };
+
+export type ItemWithRelevance = Item & { relevance?: number | null };

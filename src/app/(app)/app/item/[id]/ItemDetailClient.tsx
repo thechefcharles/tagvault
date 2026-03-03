@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { DownloadFileButton } from "@/components/DownloadFileButton";
 import type { Item } from "@/types/item";
 
 export function ItemDetailClient({ item }: { item: Item }) {
@@ -76,12 +77,7 @@ export function ItemDetailClient({ item }: { item: Item }) {
       )}
 
       {item.type === "file" && item.storage_path && (
-        <a
-          href={`/api/items/${item.id}?download=1`}
-          className="inline-block px-4 py-2 border border-neutral-300 rounded-md hover:bg-neutral-100 dark:border-neutral-600 dark:hover:bg-neutral-800"
-        >
-          Download file
-        </a>
+        <DownloadFileButton itemId={item.id} />
       )}
 
       <form onSubmit={handleSave} className="space-y-4">
