@@ -22,6 +22,9 @@ export default async function AppPage() {
           <Link href="/search" className="text-sm text-neutral-600 hover:text-foreground dark:text-neutral-400">
             Search
           </Link>
+          <Link href="/saved-searches" className="text-sm text-neutral-600 hover:text-foreground dark:text-neutral-400">
+            Saved Searches
+          </Link>
         </div>
         <LogoutButton />
       </header>

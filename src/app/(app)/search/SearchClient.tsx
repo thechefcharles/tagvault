@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
+import { SavedSearchModal } from "@/components/saved-searches/SavedSearchModal";
 import type { Item } from "@/types/item";
 
 const DEBOUNCE_MS = 350;
@@ -20,6 +21,7 @@ export function SearchClient() {
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(false);
   const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [saveModalOpen, setSaveModalOpen] = useState(false);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedQuery(query), DEBOUNCE_MS);
@@ -64,7 +66,24 @@ export function SearchClient() {
           />
           Semantic boost
         </label>
+        <button
+          type="button"
+          onClick={() => setSaveModalOpen(true)}
+          className="px-3 py-2 text-sm border border-neutral-300 rounded-md hover:bg-neutral-100 dark:border-neutral-600 dark:hover:bg-neutral-800"
+        >
+          Save this search
+        </button>
       </div>
+      <SavedSearchModal
+        open={saveModalOpen}
+        onClose={() => setSaveModalOpen(false)}
+        onSave={() => setSaveModalOpen(false)}
+        preset={{
+          name: debouncedQuery.slice(0, 50) || undefined,
+          query: debouncedQuery,
+          semantic_enabled: semantic,
+        }}
+      />
 
       {loading ? (
         <p className="text-neutral-500 py-8">Loading…</p>
