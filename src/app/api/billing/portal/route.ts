@@ -1,18 +1,25 @@
+import { NextRequest } from 'next/server';
 import { requireUser } from '@/lib/server/auth';
 import { apiOk, apiError } from '@/lib/api/response';
 import { getStripe } from '@/lib/stripe';
 import { getBillingAccount } from '@/lib/billing';
 import { createAdminClient } from '@/lib/supabase/admin';
 
-function getAppUrl(): string {
-  const url =
+function getBaseUrl(request: NextRequest): string {
+  try {
+    const url = new URL(request.url);
+    if (url.origin && url.origin.startsWith('http')) return url.origin;
+  } catch {
+    /* ignore */
+  }
+  const fallback =
     process.env.NEXT_PUBLIC_APP_URL ||
     process.env.VERCEL_URL ||
     'http://localhost:3000';
-  return url.startsWith('http') ? url : `https://${url}`;
+  return fallback.startsWith('http') ? fallback : `https://${fallback}`;
 }
 
-export async function POST() {
+export async function POST(request: NextRequest) {
   let user: { id: string; email?: string };
   try {
     user = await requireUser();
@@ -36,7 +43,7 @@ export async function POST() {
     billing = await getBillingAccount(user.id);
   }
 
-  const baseUrl = getAppUrl();
+  const baseUrl = getBaseUrl(request);
   const session = await stripe.billingPortal.sessions.create({
     customer: billing.stripe_customer_id!,
     return_url: `${baseUrl}/app`,
