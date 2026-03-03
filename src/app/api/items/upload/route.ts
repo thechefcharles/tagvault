@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { requireUser } from '@/lib/server/auth';
 import { checkRateLimit } from '@/lib/api/rate-limit';
 import { apiError } from '@/lib/api/response';
+import { logApi } from '@/lib/apiLog';
 import { assertWithinLimits, incrementUsage, EntitlementError } from '@/lib/entitlements';
 import { createClient } from '@/lib/supabase/server';
 import { VAULT_BUCKET } from '@/lib/storage/constants';
@@ -10,10 +11,21 @@ import { VAULT_BUCKET } from '@/lib/storage/constants';
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 
 export async function POST(request: Request) {
+  const requestId = crypto.randomUUID();
+  const start = Date.now();
   try {
     const user = await requireUser();
-    const limit = await checkRateLimit(`items:${user.id}`);
+    const limit = await checkRateLimit(`upload:${user.id}`, { limit: 10, windowSec: 60 });
     if (!limit.ok) {
+      logApi({
+        requestId,
+        userId: user.id,
+        path: '/api/items/upload',
+        method: 'POST',
+        status: 429,
+        ms: Date.now() - start,
+        errorCode: 'RATE_LIMITED',
+      });
       return apiError(
         'RATE_LIMITED',
         'Too many requests. Please try again later.',
@@ -92,15 +104,34 @@ export async function POST(request: Request) {
     await incrementUsage({ userId: user.id, action: 'items_create' });
     await incrementUsage({ userId: user.id, action: 'embeddings_enqueue' });
 
+    logApi({
+      requestId,
+      userId: user.id,
+      path: '/api/items/upload',
+      method: 'POST',
+      status: 200,
+      ms: Date.now() - start,
+    });
     return NextResponse.json(updated);
   } catch (err) {
+    const ms = Date.now() - start;
     if (err instanceof Error && err.message === 'Unauthenticated') {
+      logApi({ requestId, path: '/api/items/upload', method: 'POST', status: 401, ms });
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     if (err instanceof EntitlementError) {
+      logApi({
+        requestId,
+        path: '/api/items/upload',
+        method: 'POST',
+        status: 402,
+        ms,
+        errorCode: 'PLAN_LIMIT_EXCEEDED',
+      });
       return apiError('PLAN_LIMIT_EXCEEDED', err.message, undefined, 402);
     }
     Sentry.captureException(err);
+    logApi({ requestId, path: '/api/items/upload', method: 'POST', status: 500, ms });
     return NextResponse.json(
       { error: err instanceof Error ? err.message : 'Internal error' },
       { status: 500 },

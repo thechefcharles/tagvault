@@ -24,6 +24,18 @@
 | `STRIPE_PRICE_PRO_MONTHLY` | Price ID for Pro monthly subscription |
 | `NEXT_PUBLIC_APP_URL` | Base URL for checkout/portal redirects. On Vercel, can fall back to `VERCEL_URL`. |
 
+## Phase 9A: Observability + rate limiting
+
+| Variable | Notes |
+|----------|-------|
+| `NEXT_PUBLIC_SENTRY_DSN` | Sentry DSN (client); enabled only in production |
+| `SENTRY_DSN` | Sentry DSN (server/edge); optional, falls back to `NEXT_PUBLIC_SENTRY_DSN` |
+| `UPSTASH_REDIS_REST_URL` | Upstash Redis REST URL for rate limiting |
+| `UPSTASH_REDIS_REST_TOKEN` | Upstash Redis token |
+| `CRON_SECRET` | Required for `/api/alerts/process-due` |
+
+See `docs/PHASE09_HARDENING.md` for full setup and verification.
+
 ## Production hardening (Phase 7)
 
 | Variable | Notes |
