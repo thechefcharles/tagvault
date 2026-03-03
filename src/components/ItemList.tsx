@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import type { Item } from "@/types/item";
 
 function formatDate(s: string) {
@@ -11,21 +12,23 @@ function formatDate(s: string) {
   });
 }
 
-export function ItemList({
-  items,
-  loading = false,
-  type = "all",
-  sort = "best_match",
-  onTypeChange,
-  onSortChange,
-}: {
-  items: Item[];
-  loading?: boolean;
-  type?: string;
-  sort?: string;
-  onTypeChange?: (t: string) => void;
-  onSortChange?: (s: string) => void;
-}) {
+export function ItemList({ items }: { items: Item[] }) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  const type = searchParams.get("type") ?? "all";
+  const sort = searchParams.get("sort") ?? "recent";
+
+  function setParams(updates: { type?: string; sort?: string }) {
+    const params = new URLSearchParams(searchParams);
+    if (updates.type !== undefined) {
+      if (updates.type === "all") params.delete("type");
+      else params.set("type", updates.type);
+    }
+    if (updates.sort !== undefined) params.set("sort", updates.sort);
+    router.push(`/app?${params.toString()}`);
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap gap-2 items-center">
@@ -34,7 +37,7 @@ export function ItemList({
           <button
             key={t}
             type="button"
-            onClick={() => onTypeChange?.(t)}
+            onClick={() => setParams({ type: t })}
             className={`px-2 py-1 text-sm rounded ${
               type === t
                 ? "bg-neutral-900 text-white dark:bg-neutral-100 dark:text-neutral-900"
@@ -47,20 +50,17 @@ export function ItemList({
         <span className="text-sm text-neutral-500 ml-4">Sort:</span>
         <select
           value={sort}
-          onChange={(e) => onSortChange?.(e.target.value)}
+          onChange={(e) => setParams({ sort: e.target.value })}
           className="px-2 py-1 text-sm border rounded dark:bg-neutral-800 dark:border-neutral-600"
         >
-          <option value="best_match">Best match</option>
+          <option value="recent">Recent</option>
           <option value="priority">Priority</option>
-          <option value="recent">Most recent</option>
         </select>
       </div>
 
-      {loading ? (
-        <p className="text-neutral-500 py-8 text-center">Loading…</p>
-      ) : items.length === 0 ? (
+      {items.length === 0 ? (
         <p className="text-neutral-500 py-8 text-center">
-          No items found. Use Quick Add to create one.
+          No items yet. Use Quick Add to create one.
         </p>
       ) : (
         <ul className="divide-y divide-neutral-200 dark:divide-neutral-700">

@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { SavedSearchModal } from "@/components/saved-searches/SavedSearchModal";
+import { AlertModal } from "@/components/alerts/AlertModal";
 import type { SavedSearch } from "@/types/saved-search";
 import type { Item } from "@/types/item";
 
@@ -18,6 +19,14 @@ export function SavedSearchViewClient({ saved }: { saved: SavedSearch }) {
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
   const [editModalOpen, setEditModalOpen] = useState(false);
+  const [alertModalOpen, setAlertModalOpen] = useState(false);
+  const [savedSearches, setSavedSearches] = useState<SavedSearch[]>([]);
+
+  useEffect(() => {
+    fetch("/api/saved-searches")
+      .then((res) => (res.ok ? res.json() : []))
+      .then(setSavedSearches);
+  }, []);
 
   useEffect(() => {
     async function run() {
@@ -46,6 +55,13 @@ export function SavedSearchViewClient({ saved }: { saved: SavedSearch }) {
             className="text-sm text-neutral-600 hover:underline dark:text-neutral-400"
           >
             Edit
+          </button>
+          <button
+            type="button"
+            onClick={() => setAlertModalOpen(true)}
+            className="text-sm text-neutral-600 hover:underline dark:text-neutral-400"
+          >
+            Create alert
           </button>
         </div>
         {saved.query && (
@@ -91,6 +107,14 @@ export function SavedSearchViewClient({ saved }: { saved: SavedSearch }) {
         onClose={() => setEditModalOpen(false)}
         onSave={() => window.location.reload()}
         initial={saved}
+      />
+      <AlertModal
+        open={alertModalOpen}
+        onClose={() => setAlertModalOpen(false)}
+        onSave={() => {}}
+        initial={null}
+        savedSearches={savedSearches}
+        presetSavedSearchId={saved.id}
       />
     </>
   );

@@ -1,3 +1,4 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import type { Item } from "@/types/item";
 
@@ -12,6 +13,7 @@ export async function searchItemsHybrid({
   offset = 0,
   useSemantic = true,
   queryEmbedding,
+  supabase: supabaseOverride,
 }: {
   userId: string;
   q: string;
@@ -21,8 +23,9 @@ export async function searchItemsHybrid({
   offset?: number;
   useSemantic?: boolean;
   queryEmbedding: number[] | null;
+  supabase?: SupabaseClient;
 }): Promise<HybridSearchResult[]> {
-  const supabase = await createClient();
+  const supabase = supabaseOverride ?? (await createClient());
   const typeParam = type && type !== "all" ? type : null;
 
   const { data, error } = await supabase.rpc("rpc_search_items_hybrid", {
