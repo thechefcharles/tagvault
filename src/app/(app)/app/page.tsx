@@ -1,7 +1,7 @@
 import { requireUser } from "@/lib/server/auth";
 import { LogoutButton } from "@/components/LogoutButton";
 
-export default async function DashboardPage() {
+export default async function AppPage() {
   const user = await requireUser();
 
   return (
