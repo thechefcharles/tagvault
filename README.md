@@ -1,4 +1,15 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# TagVault
+
+A Next.js app for storing and searching items (notes, links, files) with Supabase.
+
+## Environment Variables
+
+Copy `.env.example` to `.env.local` and fill in:
+
+- `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` — Supabase
+- `OPENAI_API_KEY`, `OPENAI_EMBEDDINGS_MODEL` — for hybrid search (Phase 6)
+
+See `docs/PHASE06_SEARCH.md` for Edge Function setup.
 
 ## Getting Started
 
