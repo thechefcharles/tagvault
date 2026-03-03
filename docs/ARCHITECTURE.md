@@ -50,9 +50,17 @@ The anon key is safe to expose; Row Level Security (RLS) in the database restric
 
 Use it only in server-side code when you need admin-level operations (e.g. server-side mutations that bypass RLS). It must not be imported in files that are bundled for the client.
 
-## Future Items Feature
+## Storage Model
 
-Items CRUD will live under `/app/dashboard`. The database schema will define `items` with:
+- **Bucket:** `vault` (private)
+- **Model:** single-file-per-item — each item has at most one file via `items.storage_path`
+- **Path convention:** `{user_id}/{item_id}/{filename}`
+
+`items.storage_path` is the authoritative pointer. Deleting an item must remove the storage object (see `docs/rls-verification.md`).
+
+## Items Feature
+
+Items CRUD lives under `/app` and `/app/item/[id]`. The database schema defines `items` with:
 
 - `description` (required text)
 - `priority` (integer 1–20)

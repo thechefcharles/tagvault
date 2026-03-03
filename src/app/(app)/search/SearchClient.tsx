@@ -34,10 +34,18 @@ export function SearchClient() {
       const params = new URLSearchParams();
       params.set("q", debouncedQuery);
       params.set("semantic", String(semantic));
-      const res = await fetch(`/api/search?${params.toString()}`);
+      const res = await fetch(`/api/search?${params.toString()}`, {
+        credentials: "include",
+      });
+      if (res.status === 401) {
+        window.location.href = "/login";
+        return;
+      }
       if (res.ok) {
         const data = await res.json();
         setItems(data);
+      } else {
+        setItems([]);
       }
     } finally {
       setLoading(false);

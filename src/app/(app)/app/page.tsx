@@ -5,6 +5,8 @@ import { NotificationBell } from "@/components/NotificationBell";
 import { listItems } from "@/lib/db/items";
 import { VaultClient } from "./VaultClient";
 
+export const dynamic = "force-dynamic";
+
 export default async function AppPage({
   searchParams,
 }: {

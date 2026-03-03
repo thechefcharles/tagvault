@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/server/auth";
 import { createClient } from "@/lib/supabase/server";
+import { VAULT_BUCKET } from "@/lib/storage/constants";
 import { getItemById } from "@/lib/db/items";
 
 const EXPIRES_IN = 60; // seconds
@@ -27,7 +28,7 @@ export async function GET(
 
     const supabase = await createClient();
     const { data, error } = await supabase.storage
-      .from("vault")
+      .from(VAULT_BUCKET)
       .createSignedUrl(item.storage_path, EXPIRES_IN);
 
     if (error || !data?.signedUrl) {

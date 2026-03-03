@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/server/auth";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { VAULT_BUCKET } from "@/lib/storage/constants";
 import {
   getItemById,
   updateItem,
@@ -26,7 +28,7 @@ export async function GET(
     if (download && item.type === "file" && item.storage_path) {
       const supabase = await createClient();
       const { data: urlData, error } = await supabase.storage
-        .from("vault")
+        .from(VAULT_BUCKET)
         .createSignedUrl(item.storage_path, 60);
 
       if (!error && urlData?.signedUrl) {
@@ -94,8 +96,24 @@ export async function DELETE(
     }
 
     if (item.storage_path) {
-      const supabase = await createClient();
-      await supabase.storage.from("vault").remove([item.storage_path]);
+      const admin = createAdminClient();
+      const { error: storageError } = await admin.storage
+        .from(VAULT_BUCKET)
+        .remove([item.storage_path]);
+
+      if (storageError) {
+        const msg = storageError.message?.toLowerCase() ?? "";
+        const isNotFound =
+          msg.includes("not found") ||
+          msg.includes("object not found") ||
+          msg.includes("does not exist");
+        if (!isNotFound) {
+          return NextResponse.json(
+            { error: "Failed to remove file from storage" },
+            { status: 500 }
+          );
+        }
+      }
     }
 
     await deleteItem({ userId: user.id, id });

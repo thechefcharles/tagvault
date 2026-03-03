@@ -20,10 +20,9 @@ export async function GET(request: Request) {
     if (err instanceof Error && err.message === "Unauthenticated") {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Internal error" },
-      { status: 500 }
-    );
+    const msg = err instanceof Error ? err.message : "Internal error";
+    console.error("[GET /api/items]", err);
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
 
@@ -56,9 +55,8 @@ export async function POST(request: Request) {
     if (err instanceof Error && err.message === "Unauthenticated") {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Internal error" },
-      { status: 500 }
-    );
+    const msg = err instanceof Error ? err.message : "Internal error";
+    console.error("[POST /api/items]", err);
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

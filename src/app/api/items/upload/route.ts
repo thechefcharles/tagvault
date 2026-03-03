@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/server/auth";
 import { createClient } from "@/lib/supabase/server";
+import { VAULT_BUCKET } from "@/lib/storage/constants";
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 
@@ -55,7 +56,7 @@ export async function POST(request: Request) {
 
     const buffer = await file.arrayBuffer();
     const { error: uploadError } = await supabase.storage
-      .from("vault")
+      .from(VAULT_BUCKET)
       .upload(storagePath, buffer, {
         contentType: file.type || "application/octet-stream",
         upsert: false,
