@@ -1,37 +1,61 @@
-import { createClient } from "@/lib/supabase/server";
-import type { Item } from "@/types/item";
-import type { CreateItemInput, UpdateItemInput } from "@/lib/db/validators";
+import { createClient } from '@/lib/supabase/server';
+import type { Item } from '@/types/item';
+import type { CreateItemInput, UpdateItemInput } from '@/lib/db/validators';
+
+const CURSOR_SEP = '__C__';
 
 export async function listItems({
   userId,
   type,
-  sort = "recent",
+  sort = 'recent',
+  limit = 25,
+  cursor,
 }: {
   userId: string;
-  type?: "link" | "file" | "note";
-  sort?: "recent" | "priority";
-}): Promise<Item[]> {
+  type?: 'link' | 'file' | 'note';
+  sort?: 'recent' | 'priority';
+  limit?: number;
+  cursor?: string;
+}): Promise<{ items: Item[]; nextCursor: string | null }> {
   const supabase = await createClient();
-  let query = supabase
-    .from("items")
-    .select("*")
-    .eq("user_id", userId)
-    .order("created_at", { ascending: false });
+  const safeLimit = Math.min(Math.max(1, limit), 100);
 
-  if (type) query = query.eq("type", type);
+  let query = supabase
+    .from('items')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .order('id', { ascending: false })
+    .limit(safeLimit + 1);
+
+  if (type) query = query.eq('type', type);
+
+  if (cursor) {
+    const [cursorCreatedAt] = cursor.split(CURSOR_SEP);
+    if (cursorCreatedAt) {
+      query = query.lt('created_at', cursorCreatedAt);
+    }
+  }
 
   const { data, error } = await query;
   if (error) throw error;
 
   let items = (data ?? []) as Item[];
-  if (sort === "priority") {
+  const hasMore = items.length > safeLimit;
+  if (hasMore) items = items.slice(0, safeLimit);
+
+  if (sort === 'priority') {
     items = [...items].sort((a, b) => {
       const pa = a.priority ?? 999;
       const pb = b.priority ?? 999;
       return pa - pb;
     });
   }
-  return items;
+
+  const last = items[items.length - 1];
+  const nextCursor = hasMore && last ? `${last.created_at}${CURSOR_SEP}${last.id}` : null;
+
+  return { items, nextCursor };
 }
 
 export async function getItemById({
@@ -43,14 +67,14 @@ export async function getItemById({
 }): Promise<Item | null> {
   const supabase = await createClient();
   const { data, error } = await supabase
-    .from("items")
-    .select("*")
-    .eq("id", id)
-    .eq("user_id", userId)
+    .from('items')
+    .select('*')
+    .eq('id', id)
+    .eq('user_id', userId)
     .single();
 
   if (error) {
-    if (error.code === "PGRST116") return null;
+    if (error.code === 'PGRST116') return null;
     throw error;
   }
   return data as Item;
@@ -65,14 +89,14 @@ export async function createItem({
 }): Promise<Item> {
   const supabase = await createClient();
   const { data, error } = await supabase
-    .from("items")
+    .from('items')
     .insert({
       user_id: userId,
       type: payload.type,
       title: payload.title ?? null,
       description: payload.description,
       priority: payload.priority ?? null,
-      url: payload.type === "link" ? payload.url ?? null : null,
+      url: payload.type === 'link' ? (payload.url ?? null) : null,
     })
     .select()
     .single();
@@ -98,31 +122,21 @@ export async function updateItem({
   if (payload.url !== undefined) update.url = payload.url;
 
   const { data, error } = await supabase
-    .from("items")
+    .from('items')
     .update(update)
-    .eq("id", id)
-    .eq("user_id", userId)
+    .eq('id', id)
+    .eq('user_id', userId)
     .select()
     .single();
 
   if (error) throw error;
-  if (!data) throw new Error("Item not found");
+  if (!data) throw new Error('Item not found');
   return data as Item;
 }
 
-export async function deleteItem({
-  userId,
-  id,
-}: {
-  userId: string;
-  id: string;
-}): Promise<void> {
+export async function deleteItem({ userId, id }: { userId: string; id: string }): Promise<void> {
   const supabase = await createClient();
-  const { error } = await supabase
-    .from("items")
-    .delete()
-    .eq("id", id)
-    .eq("user_id", userId);
+  const { error } = await supabase.from('items').delete().eq('id', id).eq('user_id', userId);
 
   if (error) throw error;
 }
@@ -148,14 +162,14 @@ export async function attachFileToItem({
   if (title !== undefined) update.title = title;
 
   const { data, error } = await supabase
-    .from("items")
+    .from('items')
     .update(update)
-    .eq("id", id)
-    .eq("user_id", userId)
+    .eq('id', id)
+    .eq('user_id', userId)
     .select()
     .single();
 
   if (error) throw error;
-  if (!data) throw new Error("Item not found");
+  if (!data) throw new Error('Item not found');
   return data as Item;
 }

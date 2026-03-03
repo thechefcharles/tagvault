@@ -1,17 +1,17 @@
-"use client";
+'use client';
 
-import { useState, useEffect } from "react";
-import Link from "next/link";
-import { SavedSearchModal } from "@/components/saved-searches/SavedSearchModal";
-import { AlertModal } from "@/components/alerts/AlertModal";
-import type { SavedSearch } from "@/types/saved-search";
-import type { Item } from "@/types/item";
+import { useState, useEffect } from 'react';
+import Link from 'next/link';
+import { SavedSearchModal } from '@/components/saved-searches/SavedSearchModal';
+import { AlertModal } from '@/components/alerts/AlertModal';
+import type { SavedSearch } from '@/types/saved-search';
+import type { Item } from '@/types/item';
 
 function formatDate(s: string) {
   return new Date(s).toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
   });
 }
 
@@ -23,7 +23,7 @@ export function SavedSearchViewClient({ saved }: { saved: SavedSearch }) {
   const [savedSearches, setSavedSearches] = useState<SavedSearch[]>([]);
 
   useEffect(() => {
-    fetch("/api/saved-searches")
+    fetch('/api/saved-searches')
       .then((res) => (res.ok ? res.json() : []))
       .then(setSavedSearches);
   }, []);
@@ -47,7 +47,7 @@ export function SavedSearchViewClient({ saved }: { saved: SavedSearch }) {
   return (
     <>
       <div className="mb-6">
-        <div className="flex items-center gap-2 mb-2">
+        <div className="mb-2 flex items-center gap-2">
           <h1 className="text-xl font-semibold">{saved.name}</h1>
           <button
             type="button"
@@ -72,30 +72,28 @@ export function SavedSearchViewClient({ saved }: { saved: SavedSearch }) {
       </div>
 
       {loading ? (
-        <p className="text-neutral-500 py-8">Loading results…</p>
+        <p className="py-8 text-neutral-500">Loading results…</p>
       ) : items.length === 0 ? (
-        <p className="text-neutral-500 py-8">No results found.</p>
+        <p className="py-8 text-neutral-500">No results found.</p>
       ) : (
         <ul className="divide-y divide-neutral-200 dark:divide-neutral-700">
           {items.map((item) => (
             <li key={item.id} className="py-3">
               <Link
                 href={`/app/item/${item.id}`}
-                className="block hover:bg-neutral-50 dark:hover:bg-neutral-800/50 -mx-2 px-2 py-1 rounded"
+                className="-mx-2 block rounded px-2 py-1 hover:bg-neutral-50 dark:hover:bg-neutral-800/50"
               >
-                <span className="inline-block px-1.5 py-0.5 text-xs font-medium rounded bg-neutral-200 dark:bg-neutral-700 capitalize mr-2">
+                <span className="mr-2 inline-block rounded bg-neutral-200 px-1.5 py-0.5 text-xs font-medium capitalize dark:bg-neutral-700">
                   {item.type}
                 </span>
-                <h3 className="font-medium mt-1">
+                <h3 className="mt-1 font-medium">
                   {item.title || item.description.slice(0, 60)}
-                  {!item.title && item.description.length > 60 ? "…" : ""}
+                  {!item.title && item.description.length > 60 ? '…' : ''}
                 </h3>
-                <p className="text-sm text-neutral-600 dark:text-neutral-400 mt-0.5 line-clamp-2">
+                <p className="mt-0.5 line-clamp-2 text-sm text-neutral-600 dark:text-neutral-400">
                   {item.description}
                 </p>
-                <p className="text-xs text-neutral-500 mt-1">
-                  {formatDate(item.created_at)}
-                </p>
+                <p className="mt-1 text-xs text-neutral-500">{formatDate(item.created_at)}</p>
               </Link>
             </li>
           ))}

@@ -1,31 +1,27 @@
-import { NextRequest, NextResponse } from "next/server";
-import { requireUser } from "@/lib/server/auth";
-import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
-import { VAULT_BUCKET } from "@/lib/storage/constants";
-import {
-  getItemById,
-  updateItem,
-  deleteItem,
-} from "@/lib/db/items";
-import { updateItemSchema } from "@/lib/db/validators";
+import * as Sentry from '@sentry/nextjs';
+import { NextRequest, NextResponse } from 'next/server';
+import { requireUser } from '@/lib/server/auth';
+import { checkRateLimit } from '@/lib/api/rate-limit';
+import { apiError } from '@/lib/api/response';
+import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
+import { VAULT_BUCKET } from '@/lib/storage/constants';
+import { getItemById, updateItem, deleteItem } from '@/lib/db/items';
+import { updateItemSchema } from '@/lib/db/validators';
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const user = await requireUser();
     const { id } = await params;
     const { searchParams } = new URL(request.url);
-    const download = searchParams.get("download") === "1";
+    const download = searchParams.get('download') === '1';
 
     const item = await getItemById({ userId: user.id, id });
     if (!item) {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
 
-    if (download && item.type === "file" && item.storage_path) {
+    if (download && item.type === 'file' && item.storage_path) {
       const supabase = await createClient();
       const { data: urlData, error } = await supabase.storage
         .from(VAULT_BUCKET)
@@ -38,30 +34,37 @@ export async function GET(
 
     return NextResponse.json(item);
   } catch (err) {
-    if (err instanceof Error && err.message === "Unauthenticated") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (err instanceof Error && err.message === 'Unauthenticated') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    Sentry.captureException(err);
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Internal error" },
-      { status: 500 }
+      { error: err instanceof Error ? err.message : 'Internal error' },
+      { status: 500 },
     );
   }
 }
 
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const user = await requireUser();
+    const limit = await checkRateLimit(`items:${user.id}`);
+    if (!limit.ok) {
+      return apiError(
+        'RATE_LIMITED',
+        'Too many requests. Please try again later.',
+        { retryAfter: limit.retryAfter },
+        429,
+      );
+    }
     const { id } = await params;
     const body = await request.json();
 
     const parsed = updateItemSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json(
-        { error: "Validation failed", details: parsed.error.flatten() },
-        { status: 400 }
+        { error: 'Validation failed', details: parsed.error.flatten() },
+        { status: 400 },
       );
     }
 
@@ -72,27 +75,37 @@ export async function PATCH(
     });
     return NextResponse.json(item);
   } catch (err) {
-    if (err instanceof Error && err.message === "Unauthenticated") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (err instanceof Error && err.message === 'Unauthenticated') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    Sentry.captureException(err);
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Internal error" },
-      { status: 500 }
+      { error: err instanceof Error ? err.message : 'Internal error' },
+      { status: 500 },
     );
   }
 }
 
 export async function DELETE(
   _request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const user = await requireUser();
+    const limit = await checkRateLimit(`items:${user.id}`);
+    if (!limit.ok) {
+      return apiError(
+        'RATE_LIMITED',
+        'Too many requests. Please try again later.',
+        { retryAfter: limit.retryAfter },
+        429,
+      );
+    }
     const { id } = await params;
 
     const item = await getItemById({ userId: user.id, id });
     if (!item) {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
 
     if (item.storage_path) {
@@ -102,15 +115,15 @@ export async function DELETE(
         .remove([item.storage_path]);
 
       if (storageError) {
-        const msg = storageError.message?.toLowerCase() ?? "";
+        const msg = storageError.message?.toLowerCase() ?? '';
         const isNotFound =
-          msg.includes("not found") ||
-          msg.includes("object not found") ||
-          msg.includes("does not exist");
+          msg.includes('not found') ||
+          msg.includes('object not found') ||
+          msg.includes('does not exist');
         if (!isNotFound) {
           return NextResponse.json(
-            { error: "Failed to remove file from storage" },
-            { status: 500 }
+            { error: 'Failed to remove file from storage' },
+            { status: 500 },
           );
         }
       }
@@ -119,12 +132,13 @@ export async function DELETE(
     await deleteItem({ userId: user.id, id });
     return NextResponse.json({ ok: true });
   } catch (err) {
-    if (err instanceof Error && err.message === "Unauthenticated") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (err instanceof Error && err.message === 'Unauthenticated') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    Sentry.captureException(err);
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Internal error" },
-      { status: 500 }
+      { error: err instanceof Error ? err.message : 'Internal error' },
+      { status: 500 },
     );
   }
 }

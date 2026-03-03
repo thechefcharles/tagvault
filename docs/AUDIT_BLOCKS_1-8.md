@@ -50,9 +50,7 @@ The app was built through **Cursor Prompts 01–08** (Phases 1–8) and implemen
 
 ### Gap: `/alerts` and `/notifications` not in middleware
 
-Middleware protects `/app`, `/search`, `/saved-searches` but not `/alerts` or `/notifications`. Unauthenticated users can reach these pages (APIs still return 401).
-
-**Recommendation:** Add `pathname.startsWith("/alerts")` and `pathname.startsWith("/notifications")` to protected paths.
+**✅ Fixed (Ship Hardening):** Middleware now protects `pathname.startsWith("/alerts")` and `pathname.startsWith("/notifications")`. Verify: unauthenticated users are redirected to login.
 
 ---
 
@@ -139,28 +137,31 @@ Middleware protects `/app`, `/search`, `/saved-searches` but not `/alerts` or `/
 
 ## Gaps to Address
 
-### 1. Middleware: protect `/alerts` and `/notifications`
+### 1. Middleware: protect `/alerts` and `/notifications` — ✅ Done
 
-Add these paths so unauthenticated users are redirected to login:
+Middleware includes these paths. See `src/lib/supabase/middleware.ts`.
 
-```ts
-pathname.startsWith("/alerts") ||
-pathname.startsWith("/notifications")
-```
+### 2. RLS on auxiliary tables (embedding_queue, search_queries) — ✅ Done
 
-### 2. Block 1 items schema (optional)
+Migration `0010_rls_embedding_queue_search_queries.sql`: `embedding_queue` locked to service-role only; `search_queries` allows authenticated read/write. Run in Supabase SQL Editor if not applied via push.
+
+### 3. Storage cleanup on item delete — ✅ Done
+
+`DELETE /api/items/[id]` removes the storage object via admin client before deleting the DB row. See `src/app/api/items/[id]/route.ts`. UI calls this endpoint.
+
+### 4. Block 1 items schema (optional)
 
 The spec requested `source_title`, `source_domain`, `file_path`, `file_mime`, `file_size`. Current schema uses `storage_path`, `mime_type` and omits others. Align only if those fields are needed for product behavior.
 
-### 3. Block 2 profiles schema (optional)
+### 5. Block 2 profiles schema (optional)
 
 Spec had `email`, `is_pro`. Current has `username`, `full_name`, `avatar_url`. Add `email`/`is_pro` only if required for future features (e.g. Pro flag).
 
-### 4. Block 3 attachments (optional)
+### 6. Block 3 attachments (optional)
 
 Spec included a separate `attachments` table and `item-attachments` bucket. Current design embeds file info in items. Revisit only if multi-file per item is required.
 
-### 5. Block 4 search filters (optional)
+### 7. Block 4 search filters (optional)
 
 Spec had tags, date range, hasAttachments, cursor pagination. Current search is simpler. Add if product needs these filters.
 
@@ -177,7 +178,7 @@ Spec had tags, date range, hasAttachments, cursor pagination. Current search is 
 | No service role in browser | ✅ |
 | Signup creates profile | ✅ |
 | Logout invalidates session | ✅ |
-| Protected routes redirect | ⚠️ Fix: add /alerts, /notifications |
+| Protected routes redirect | ✅ /alerts, /notifications in middleware |
 | CRUD items | ✅ |
 | FTS / hybrid search | ✅ |
 | Saved searches CRUD + run | ✅ |
@@ -188,4 +189,4 @@ Spec had tags, date range, hasAttachments, cursor pagination. Current search is 
 
 ## Conclusion
 
-Core behavior for Blocks 1–8 is implemented. Main action: extend middleware to protect `/alerts` and `/notifications`. Other differences are schema and UX choices that can be revisited when product requirements are clearer.
+Core behavior for Blocks 1–8 is implemented. Ship hardening pass (2024): middleware protects `/alerts` and `/notifications`; RLS added for `embedding_queue` and `search_queries`; storage cleanup on item delete; two-user test plan in `docs/SHIP_CHECKLIST_BLOCKS_1-8.md`. Other differences are schema and UX choices that can be revisited when product requirements are clearer.

@@ -1,7 +1,7 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
-import { getQueryEmbedding } from "@/lib/embeddings";
-import { searchItemsHybrid } from "@/lib/db/search-hybrid";
-import type { Item } from "@/types/item";
+import type { SupabaseClient } from '@supabase/supabase-js';
+import { getQueryEmbedding } from '@/lib/embeddings';
+import { searchItemsHybrid } from '@/lib/db/search-hybrid';
+import type { Item } from '@/types/item';
 
 export type SavedSearchRow = {
   id: string;
@@ -19,10 +19,10 @@ export type SavedSearchRow = {
 export async function runSavedSearch(
   saved: SavedSearchRow,
   userId: string,
-  supabase?: SupabaseClient
+  supabase?: SupabaseClient,
 ): Promise<Item[]> {
   const filters = (saved.filters ?? {}) as { type?: string[] };
-  const type = filters.type?.[0] ?? "all";
+  const type = filters.type?.[0] ?? 'all';
 
   let queryEmbedding: number[] | null = null;
   if (saved.semantic_enabled && saved.query?.trim()) {
@@ -31,9 +31,9 @@ export async function runSavedSearch(
 
   return searchItemsHybrid({
     userId,
-    q: saved.query ?? "",
-    type: type as "link" | "file" | "note" | "all",
-    sort: (saved.sort ?? "best_match") as "best_match" | "priority" | "recent",
+    q: saved.query ?? '',
+    type: type as 'link' | 'file' | 'note' | 'all',
+    sort: (saved.sort ?? 'best_match') as 'best_match' | 'priority' | 'recent',
     limit: 50,
     offset: 0,
     useSemantic: saved.semantic_enabled,

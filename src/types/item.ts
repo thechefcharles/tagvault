@@ -1,4 +1,4 @@
-export type ItemType = "link" | "file" | "note";
+export type ItemType = 'link' | 'file' | 'note';
 
 export type Item = {
   id: string;

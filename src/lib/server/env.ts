@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from 'zod';
 
 const envSchema = z.object({
   NEXT_PUBLIC_SUPABASE_URL: z.string().url().min(1),
@@ -15,7 +15,7 @@ function validateEnv() {
 
   if (!result.success) {
     const msg = `Missing or invalid env vars: ${JSON.stringify(result.error.flatten().fieldErrors)}`;
-    if (process.env.NODE_ENV === "production") {
+    if (process.env.NODE_ENV === 'production') {
       throw new Error(msg);
     }
     console.error(msg);

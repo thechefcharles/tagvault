@@ -1,5 +1,5 @@
-import { createClient } from "@/lib/supabase/server";
-import type { User } from "@supabase/supabase-js";
+import { createClient } from '@/lib/supabase/server';
+import type { User } from '@supabase/supabase-js';
 
 export async function getCurrentUser(): Promise<User | null> {
   const supabase = await createClient();
@@ -12,7 +12,7 @@ export async function getCurrentUser(): Promise<User | null> {
 export async function requireUser(): Promise<User> {
   const user = await getCurrentUser();
   if (!user) {
-    throw new Error("Unauthenticated");
+    throw new Error('Unauthenticated');
   }
   return user;
 }
@@ -20,6 +20,6 @@ export async function requireUser(): Promise<User> {
 export async function requireNoUser(): Promise<void> {
   const user = await getCurrentUser();
   if (user) {
-    throw new Error("Already authenticated");
+    throw new Error('Already authenticated');
   }
 }

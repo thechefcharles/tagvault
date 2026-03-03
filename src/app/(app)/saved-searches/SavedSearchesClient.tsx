@@ -1,15 +1,15 @@
-"use client";
+'use client';
 
-import { useState, useEffect, useCallback } from "react";
-import Link from "next/link";
-import { SavedSearchModal } from "@/components/saved-searches/SavedSearchModal";
-import type { SavedSearch } from "@/types/saved-search";
+import { useState, useEffect, useCallback } from 'react';
+import Link from 'next/link';
+import { SavedSearchModal } from '@/components/saved-searches/SavedSearchModal';
+import type { SavedSearch } from '@/types/saved-search';
 
 function formatDate(s: string) {
   return new Date(s).toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
   });
 }
 
@@ -22,7 +22,7 @@ export function SavedSearchesClient() {
   const fetchSearches = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/saved-searches");
+      const res = await fetch('/api/saved-searches');
       if (res.ok) {
         const data = await res.json();
         setSearches(data);
@@ -38,8 +38,8 @@ export function SavedSearchesClient() {
 
   async function handlePinnedChange(s: SavedSearch) {
     const res = await fetch(`/api/saved-searches/${s.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ pinned: !s.pinned }),
     });
     if (res.ok) fetchSearches();
@@ -48,7 +48,7 @@ export function SavedSearchesClient() {
   async function handleDelete(s: SavedSearch) {
     if (!confirm(`Delete "${s.name}"?`)) return;
     const res = await fetch(`/api/saved-searches/${s.id}`, {
-      method: "DELETE",
+      method: 'DELETE',
     });
     if (res.ok) fetchSearches();
   }
@@ -68,25 +68,25 @@ export function SavedSearchesClient() {
             setEditing(null);
             setModalOpen(true);
           }}
-          className="px-4 py-2 bg-neutral-900 text-white rounded-md hover:bg-neutral-800 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-neutral-200"
+          className="rounded-md bg-neutral-900 px-4 py-2 text-white hover:bg-neutral-800 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-neutral-200"
         >
           New Saved Search
         </button>
       </div>
 
       {loading ? (
-        <p className="text-neutral-500 py-8">Loading…</p>
+        <p className="py-8 text-neutral-500">Loading…</p>
       ) : sorted.length === 0 ? (
-        <p className="text-neutral-500 py-8">
+        <p className="py-8 text-neutral-500">
           No saved searches. Create one to run the same search quickly.
         </p>
       ) : (
         <ul className="divide-y divide-neutral-200 dark:divide-neutral-700">
           {sorted.map((s) => (
-            <li key={s.id} className="py-3 flex items-center gap-2">
+            <li key={s.id} className="flex items-center gap-2 py-3">
               <Link
                 href={`/saved-searches/${s.id}`}
-                className="flex-1 min-w-0 block hover:bg-neutral-50 dark:hover:bg-neutral-800/50 -mx-2 px-2 py-1 rounded"
+                className="-mx-2 block min-w-0 flex-1 rounded px-2 py-1 hover:bg-neutral-50 dark:hover:bg-neutral-800/50"
               >
                 <div className="flex items-center gap-2">
                   {s.pinned && (
@@ -94,16 +94,14 @@ export function SavedSearchesClient() {
                       📌
                     </span>
                   )}
-                  <span className="font-medium truncate">{s.name}</span>
+                  <span className="truncate font-medium">{s.name}</span>
                 </div>
                 {s.query && (
-                  <p className="text-sm text-neutral-600 dark:text-neutral-400 truncate mt-0.5">
+                  <p className="mt-0.5 truncate text-sm text-neutral-600 dark:text-neutral-400">
                     &ldquo;{s.query}&rdquo;
                   </p>
                 )}
-                <p className="text-xs text-neutral-500 mt-1">
-                  Updated {formatDate(s.updated_at)}
-                </p>
+                <p className="mt-1 text-xs text-neutral-500">Updated {formatDate(s.updated_at)}</p>
               </Link>
               <button
                 type="button"
@@ -112,9 +110,9 @@ export function SavedSearchesClient() {
                   handlePinnedChange(s);
                 }}
                 className="shrink-0 px-2 py-1 text-sm"
-                title={s.pinned ? "Unpin" : "Pin"}
+                title={s.pinned ? 'Unpin' : 'Pin'}
               >
-                {s.pinned ? "📌" : "📍"}
+                {s.pinned ? '📌' : '📍'}
               </button>
               <button
                 type="button"

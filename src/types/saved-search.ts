@@ -12,7 +12,7 @@ export type SavedSearch = {
   name: string;
   query: string;
   filters: SavedSearchFilters;
-  sort: "best_match" | "priority" | "recent";
+  sort: 'best_match' | 'priority' | 'recent';
   semantic_enabled: boolean;
   pinned: boolean;
   created_at: string;

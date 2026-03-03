@@ -1,7 +1,7 @@
-import OpenAI from "openai";
-import { createClient } from "@/lib/supabase/server";
+import OpenAI from 'openai';
+import { createClient } from '@/lib/supabase/server';
 
-const MODEL = process.env.OPENAI_EMBEDDINGS_MODEL ?? "text-embedding-3-small";
+const MODEL = process.env.OPENAI_EMBEDDINGS_MODEL ?? 'text-embedding-3-small';
 
 export async function getQueryEmbedding(query: string): Promise<number[] | null> {
   const key = process.env.OPENAI_API_KEY;
@@ -12,9 +12,9 @@ export async function getQueryEmbedding(query: string): Promise<number[] | null>
 
   const supabase = await createClient();
   const { data: cached } = await supabase
-    .from("search_queries")
-    .select("embedding")
-    .eq("query", trimmed)
+    .from('search_queries')
+    .select('embedding')
+    .eq('query', trimmed)
     .single();
 
   if (cached?.embedding && Array.isArray(cached.embedding)) {
@@ -31,10 +31,10 @@ export async function getQueryEmbedding(query: string): Promise<number[] | null>
   if (!embedding || !Array.isArray(embedding)) return null;
 
   await supabase
-    .from("search_queries")
+    .from('search_queries')
     .upsert(
       { query: trimmed, embedding, created_at: new Date().toISOString() },
-      { onConflict: "query" }
+      { onConflict: 'query' },
     );
 
   return embedding;

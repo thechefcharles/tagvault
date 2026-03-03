@@ -1,28 +1,26 @@
-import { NextRequest, NextResponse } from "next/server";
-import { requireUser } from "@/lib/server/auth";
-import { createClient } from "@/lib/supabase/server";
-import { VAULT_BUCKET } from "@/lib/storage/constants";
-import { getItemById } from "@/lib/db/items";
+import * as Sentry from '@sentry/nextjs';
+import { NextRequest, NextResponse } from 'next/server';
+import { requireUser } from '@/lib/server/auth';
+import { createClient } from '@/lib/supabase/server';
+import { VAULT_BUCKET } from '@/lib/storage/constants';
+import { getItemById } from '@/lib/db/items';
 
 const EXPIRES_IN = 60; // seconds
 
-export async function GET(
-  _request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const user = await requireUser();
     const { id } = await params;
 
     const item = await getItemById({ userId: user.id, id });
     if (!item) {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
 
-    if (item.type !== "file" || !item.storage_path) {
+    if (item.type !== 'file' || !item.storage_path) {
       return NextResponse.json(
-        { error: "Item is not a file or has no storage path" },
-        { status: 400 }
+        { error: 'Item is not a file or has no storage path' },
+        { status: 400 },
       );
     }
 
@@ -33,19 +31,20 @@ export async function GET(
 
     if (error || !data?.signedUrl) {
       return NextResponse.json(
-        { error: error?.message ?? "Failed to create signed URL" },
-        { status: 500 }
+        { error: error?.message ?? 'Failed to create signed URL' },
+        { status: 500 },
       );
     }
 
     return NextResponse.json({ url: data.signedUrl });
   } catch (err) {
-    if (err instanceof Error && err.message === "Unauthenticated") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (err instanceof Error && err.message === 'Unauthenticated') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    Sentry.captureException(err);
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Internal error" },
-      { status: 500 }
+      { error: err instanceof Error ? err.message : 'Internal error' },
+      { status: 500 },
     );
   }
 }

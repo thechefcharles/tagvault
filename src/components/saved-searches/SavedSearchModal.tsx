@@ -1,11 +1,13 @@
-"use client";
+'use client';
 
-import { useState, useEffect } from "react";
-import type { SavedSearch } from "@/types/saved-search";
+import { useState, useEffect } from 'react';
+import type { SavedSearch } from '@/types/saved-search';
 
-type SortOption = "best_match" | "priority" | "recent";
+type SortOption = 'best_match' | 'priority' | 'recent';
 
-type Preset = Partial<Pick<SavedSearch, "name" | "query" | "sort" | "semantic_enabled" | "pinned" | "filters">>;
+type Preset = Partial<
+  Pick<SavedSearch, 'name' | 'query' | 'sort' | 'semantic_enabled' | 'pinned' | 'filters'>
+>;
 
 export function SavedSearchModal({
   open,
@@ -20,12 +22,12 @@ export function SavedSearchModal({
   initial?: SavedSearch | null;
   preset?: Preset | null;
 }) {
-  const [name, setName] = useState("");
-  const [query, setQuery] = useState("");
-  const [sort, setSort] = useState<SortOption>("best_match");
+  const [name, setName] = useState('');
+  const [query, setQuery] = useState('');
+  const [sort, setSort] = useState<SortOption>('best_match');
   const [semanticEnabled, setSemanticEnabled] = useState(true);
   const [pinned, setPinned] = useState(false);
-  const [filtersJson, setFiltersJson] = useState("{}");
+  const [filtersJson, setFiltersJson] = useState('{}');
   const [filtersError, setFiltersError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -33,25 +35,25 @@ export function SavedSearchModal({
   useEffect(() => {
     if (initial) {
       setName(initial.name);
-      setQuery(initial.query ?? "");
-      setSort((initial.sort as SortOption) ?? "best_match");
+      setQuery(initial.query ?? '');
+      setSort((initial.sort as SortOption) ?? 'best_match');
       setSemanticEnabled(initial.semantic_enabled ?? true);
       setPinned(initial.pinned ?? false);
       setFiltersJson(JSON.stringify(initial.filters ?? {}, null, 2));
     } else if (preset) {
-      setName(preset.name ?? preset.query?.slice(0, 50) ?? "");
-      setQuery(preset.query ?? "");
-      setSort((preset.sort as SortOption) ?? "best_match");
+      setName(preset.name ?? preset.query?.slice(0, 50) ?? '');
+      setQuery(preset.query ?? '');
+      setSort((preset.sort as SortOption) ?? 'best_match');
       setSemanticEnabled(preset.semantic_enabled ?? true);
       setPinned(preset.pinned ?? false);
       setFiltersJson(JSON.stringify(preset.filters ?? {}, null, 2));
     } else {
-      setName("");
-      setQuery("");
-      setSort("best_match");
+      setName('');
+      setQuery('');
+      setSort('best_match');
       setSemanticEnabled(true);
       setPinned(false);
-      setFiltersJson("{}");
+      setFiltersJson('{}');
     }
     setFiltersError(null);
     setError(null);
@@ -59,11 +61,11 @@ export function SavedSearchModal({
 
   function parseFilters(): Record<string, unknown> | null {
     try {
-      const parsed = JSON.parse(filtersJson || "{}");
-      if (typeof parsed !== "object" || parsed === null) return {};
+      const parsed = JSON.parse(filtersJson || '{}');
+      if (typeof parsed !== 'object' || parsed === null) return {};
       return parsed as Record<string, unknown>;
     } catch {
-      setFiltersError("Invalid JSON");
+      setFiltersError('Invalid JSON');
       return null;
     }
   }
@@ -77,16 +79,14 @@ export function SavedSearchModal({
     if (filters === null) return;
 
     if (!name.trim()) {
-      setError("Name is required");
+      setError('Name is required');
       return;
     }
 
     setLoading(true);
     try {
-      const url = initial
-        ? `/api/saved-searches/${initial.id}`
-        : "/api/saved-searches";
-      const method = initial ? "PATCH" : "POST";
+      const url = initial ? `/api/saved-searches/${initial.id}` : '/api/saved-searches';
+      const method = initial ? 'PATCH' : 'POST';
       const body = initial
         ? { name: name.trim(), query, filters, sort, semantic_enabled: semanticEnabled, pinned }
         : {
@@ -100,13 +100,13 @@ export function SavedSearchModal({
 
       const res = await fetch(url, {
         method,
-        headers: { "Content-Type": "application/json" },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
       const data = await res.json();
 
       if (!res.ok) {
-        setError(data.error ?? "Failed to save");
+        setError(data.error ?? 'Failed to save');
         setLoading(false);
         return;
       }
@@ -128,37 +128,37 @@ export function SavedSearchModal({
         className="w-full max-w-md rounded-lg border border-neutral-200 bg-white p-6 dark:border-neutral-700 dark:bg-neutral-900"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-lg font-semibold mb-4">
-          {initial ? "Edit Saved Search" : "New Saved Search"}
+        <h2 className="mb-4 text-lg font-semibold">
+          {initial ? 'Edit Saved Search' : 'New Saved Search'}
         </h2>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium mb-1">Name *</label>
+            <label className="mb-1 block text-sm font-medium">Name *</label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
               required
               maxLength={200}
-              className="w-full px-3 py-2 border border-neutral-300 rounded-md dark:border-neutral-600 dark:bg-neutral-800"
+              className="w-full rounded-md border border-neutral-300 px-3 py-2 dark:border-neutral-600 dark:bg-neutral-800"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">Query</label>
+            <label className="mb-1 block text-sm font-medium">Query</label>
             <input
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search terms…"
-              className="w-full px-3 py-2 border border-neutral-300 rounded-md dark:border-neutral-600 dark:bg-neutral-800"
+              className="w-full rounded-md border border-neutral-300 px-3 py-2 dark:border-neutral-600 dark:bg-neutral-800"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">Sort</label>
+            <label className="mb-1 block text-sm font-medium">Sort</label>
             <select
               value={sort}
               onChange={(e) => setSort(e.target.value as SortOption)}
-              className="w-full px-3 py-2 border rounded-md dark:bg-neutral-800 dark:border-neutral-600"
+              className="w-full rounded-md border px-3 py-2 dark:border-neutral-600 dark:bg-neutral-800"
             >
               <option value="best_match">Best match</option>
               <option value="priority">Priority</option>
@@ -184,9 +184,7 @@ export function SavedSearchModal({
             </label>
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">
-              Filters (JSON, optional)
-            </label>
+            <label className="mb-1 block text-sm font-medium">Filters (JSON, optional)</label>
             <textarea
               value={filtersJson}
               onChange={(e) => {
@@ -194,32 +192,28 @@ export function SavedSearchModal({
                 setFiltersError(null);
               }}
               rows={3}
-              className="w-full px-3 py-2 font-mono text-sm border rounded-md dark:bg-neutral-800 dark:border-neutral-600"
+              className="w-full rounded-md border px-3 py-2 font-mono text-sm dark:border-neutral-600 dark:bg-neutral-800"
               placeholder='{"type": ["note"], "tags": []}'
             />
             {filtersError && (
-              <p className="text-sm text-red-600 dark:text-red-400 mt-1">
-                {filtersError}
-              </p>
+              <p className="mt-1 text-sm text-red-600 dark:text-red-400">{filtersError}</p>
             )}
           </div>
-          {error && (
-            <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
-          )}
+          {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
           <div className="flex gap-2 pt-2">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 border rounded-md dark:border-neutral-600"
+              className="rounded-md border px-4 py-2 dark:border-neutral-600"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="px-4 py-2 bg-neutral-900 text-white rounded-md hover:bg-neutral-800 disabled:opacity-50 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-neutral-200"
+              className="rounded-md bg-neutral-900 px-4 py-2 text-white hover:bg-neutral-800 disabled:opacity-50 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-neutral-200"
             >
-              {loading ? "Saving…" : "Save"}
+              {loading ? 'Saving…' : 'Save'}
             </button>
           </div>
         </form>

@@ -1,14 +1,10 @@
-import { notFound } from "next/navigation";
-import Link from "next/link";
-import { requireUser } from "@/lib/server/auth";
-import { getItemById } from "@/lib/db/items";
-import { ItemDetailClient } from "./ItemDetailClient";
+import { notFound } from 'next/navigation';
+import Link from 'next/link';
+import { requireUser } from '@/lib/server/auth';
+import { getItemById } from '@/lib/db/items';
+import { ItemDetailClient } from './ItemDetailClient';
 
-export default async function ItemDetailPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
+export default async function ItemDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await requireUser();
   const { id } = await params;
 
@@ -17,18 +13,18 @@ export default async function ItemDetailPage({
 
   return (
     <div className="min-h-screen p-6">
-      <header className="max-w-2xl mx-auto flex items-center gap-4 mb-6">
+      <header className="mx-auto mb-6 flex max-w-2xl items-center gap-4">
         <Link
           href="/app"
           className="text-neutral-600 hover:text-foreground dark:text-neutral-400 dark:hover:text-neutral-100"
         >
           ← Back
         </Link>
-        <span className="text-sm px-2 py-0.5 rounded bg-neutral-200 dark:bg-neutral-700 capitalize">
+        <span className="rounded bg-neutral-200 px-2 py-0.5 text-sm capitalize dark:bg-neutral-700">
           {item.type}
         </span>
       </header>
-      <main className="max-w-2xl mx-auto">
+      <main className="mx-auto max-w-2xl">
         <ItemDetailClient item={item} />
       </main>
     </div>

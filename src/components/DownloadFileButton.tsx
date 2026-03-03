@@ -1,6 +1,6 @@
-"use client";
+'use client';
 
-import { useState } from "react";
+import { useState } from 'react';
 
 export function DownloadFileButton({ itemId }: { itemId: string }) {
   const [loading, setLoading] = useState(false);
@@ -11,7 +11,7 @@ export function DownloadFileButton({ itemId }: { itemId: string }) {
       const res = await fetch(`/api/items/${itemId}/download`);
       const data = await res.json();
       if (res.ok && data.url) {
-        window.open(data.url, "_blank", "noopener,noreferrer");
+        window.open(data.url, '_blank', 'noopener,noreferrer');
       }
     } finally {
       setLoading(false);
@@ -23,9 +23,9 @@ export function DownloadFileButton({ itemId }: { itemId: string }) {
       type="button"
       onClick={handleClick}
       disabled={loading}
-      className="inline-block px-4 py-2 border border-neutral-300 rounded-md hover:bg-neutral-100 dark:border-neutral-600 dark:hover:bg-neutral-800 disabled:opacity-50"
+      className="inline-block rounded-md border border-neutral-300 px-4 py-2 hover:bg-neutral-100 disabled:opacity-50 dark:border-neutral-600 dark:hover:bg-neutral-800"
     >
-      {loading ? "Preparing…" : "Download file"}
+      {loading ? 'Preparing…' : 'Download file'}
     </button>
   );
 }
