@@ -5,10 +5,15 @@ import { apiError } from '@/lib/api/response';
 import { assertWithinLimits, incrementUsage, EntitlementError } from '@/lib/entitlements';
 import { getQueryEmbedding } from '@/lib/embeddings';
 import { searchItemsHybrid } from '@/lib/db/search-hybrid';
+import { rateLimitOrThrow, RateLimitError } from '@/lib/rateLimit';
+import { logApi } from '@/lib/apiLog';
 
 export async function GET(request: Request) {
+  const requestId = crypto.randomUUID();
+  const start = Date.now();
   try {
     const user = await requireUser();
+    await rateLimitOrThrow({ key: `user:${user.id}:search`, limit: 60, windowSec: 60 });
     const { searchParams } = new URL(request.url);
     const q = (searchParams.get('q') ?? '').trim();
     const type = (searchParams.get('type') ?? 'all') as 'link' | 'file' | 'note' | 'all';
@@ -54,15 +59,46 @@ export async function GET(request: Request) {
       await incrementUsage({ userId: user.id, action: 'searches_run' });
     }
 
-    return NextResponse.json({ items: page, nextCursor });
+    const res = NextResponse.json({ items: page, nextCursor });
+    logApi({
+      requestId,
+      userId: user.id,
+      path: '/api/search',
+      method: 'GET',
+      status: 200,
+      ms: Date.now() - start,
+    });
+    return res;
   } catch (err) {
+    const ms = Date.now() - start;
     if (err instanceof Error && err.message === 'Unauthenticated') {
+      logApi({ requestId, path: '/api/search', method: 'GET', status: 401, ms });
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    if (err instanceof RateLimitError) {
+      logApi({
+        requestId,
+        path: '/api/search',
+        method: 'GET',
+        status: 429,
+        ms,
+        errorCode: 'RATE_LIMITED',
+      });
+      return apiError('RATE_LIMITED', 'Too many requests', { retryAfter: err.retryAfter }, 429);
+    }
     if (err instanceof EntitlementError) {
+      logApi({
+        requestId,
+        path: '/api/search',
+        method: 'GET',
+        status: 402,
+        ms,
+        errorCode: 'PLAN_LIMIT_EXCEEDED',
+      });
       return apiError('PLAN_LIMIT_EXCEEDED', err.message, undefined, 402);
     }
     Sentry.captureException(err);
+    logApi({ requestId, path: '/api/search', method: 'GET', status: 500, ms });
     return NextResponse.json(
       { error: err instanceof Error ? err.message : 'Internal error' },
       { status: 500 },

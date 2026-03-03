@@ -2,6 +2,8 @@ import * as Sentry from '@sentry/nextjs';
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { runSavedSearch } from '@/lib/alerts/run-saved-search';
+import { rateLimitOrThrow, RateLimitError } from '@/lib/rateLimit';
+import { logApi } from '@/lib/apiLog';
 
 const DEFAULT_LIMIT = 25;
 
@@ -16,8 +18,35 @@ function validateCronSecret(request: Request): boolean {
 }
 
 export async function POST(request: Request) {
+  const requestId = crypto.randomUUID();
+  const start = Date.now();
+
   if (!validateCronSecret(request)) {
+    logApi({
+      requestId,
+      path: '/api/alerts/process-due',
+      method: 'POST',
+      status: 401,
+      ms: Date.now() - start,
+    });
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  try {
+    await rateLimitOrThrow({ key: 'cron:process-due', limit: 120, windowSec: 60 });
+  } catch (e) {
+    if (e instanceof RateLimitError) {
+      logApi({
+        requestId,
+        path: '/api/alerts/process-due',
+        method: 'POST',
+        status: 429,
+        ms: Date.now() - start,
+        errorCode: 'RATE_LIMITED',
+      });
+      return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
+    }
+    throw e;
   }
 
   const supabase = createAdminClient();
@@ -39,6 +68,13 @@ export async function POST(request: Request) {
   }
 
   if (!dueAlerts?.length) {
+    logApi({
+      requestId,
+      path: '/api/alerts/process-due',
+      method: 'POST',
+      status: 200,
+      ms: Date.now() - start,
+    });
     return NextResponse.json({ processed: 0, notified: 0 });
   }
 
@@ -146,5 +182,12 @@ export async function POST(request: Request) {
     processed += 1;
   }
 
+  logApi({
+    requestId,
+    path: '/api/alerts/process-due',
+    method: 'POST',
+    status: 200,
+    ms: Date.now() - start,
+  });
   return NextResponse.json({ processed, notified: totalNotified });
 }
