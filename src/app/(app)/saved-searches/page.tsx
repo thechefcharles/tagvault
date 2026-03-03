@@ -1,10 +1,12 @@
-import { requireUser } from '@/lib/server/auth';
+import { redirect } from 'next/navigation';
+import { getCurrentUser } from '@/lib/server/auth';
 import { LogoutButton } from '@/components/LogoutButton';
 import Link from 'next/link';
 import { SavedSearchesClient } from './SavedSearchesClient';
 
 export default async function SavedSearchesPage() {
-  await requireUser();
+  const user = await getCurrentUser();
+  if (!user) redirect('/login');
 
   return (
     <div className="min-h-screen p-6">

@@ -25,35 +25,44 @@ export async function updateSession(request: NextRequest) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
+  const isProtected =
+    pathname.startsWith('/app') ||
+    pathname === '/search' ||
+    pathname.startsWith('/saved-searches') ||
+    pathname.startsWith('/alerts') ||
+    pathname.startsWith('/notifications');
+
   if (!supabaseUrl || !supabaseAnonKey) {
+    // Env may be missing in Edge; redirect protected routes to login to avoid "Unauthenticated" throw
+    if (isProtected) {
+      const url = request.nextUrl.clone();
+      url.pathname = '/login';
+      return NextResponse.redirect(url);
+    }
     return response;
   }
 
-  const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
-    cookies: {
-      getAll() {
-        return request.cookies.getAll();
+  let user = null;
+  try {
+    const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll();
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value, options }) =>
+            response.cookies.set(name, value, options),
+          );
+        },
       },
-      setAll(cookiesToSet) {
-        cookiesToSet.forEach(({ name, value, options }) =>
-          response.cookies.set(name, value, options),
-        );
-      },
-    },
-  });
+    });
+    const { data } = await supabase.auth.getUser();
+    user = data.user;
+  } catch {
+    // Supabase auth failed (e.g. network); treat as unauthenticated
+  }
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (
-    (pathname.startsWith('/app') ||
-      pathname === '/search' ||
-      pathname.startsWith('/saved-searches') ||
-      pathname.startsWith('/alerts') ||
-      pathname.startsWith('/notifications')) &&
-    !user
-  ) {
+  if (isProtected && !user) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
     return NextResponse.redirect(url);

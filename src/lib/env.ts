@@ -1,9 +1,7 @@
 /**
  * Centralized environment validation.
- * Throws on boot in production if required vars are missing.
+ * Logs missing required vars; API routes will fail with clear errors if used.
  */
-
-const isProd = process.env.NODE_ENV === 'production';
 
 const required = {
   NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -30,9 +28,7 @@ function validate() {
 
   if (missing.length > 0) {
     const msg = `Missing required env vars: ${missing.join(', ')}`;
-    if (isProd) {
-      throw new Error(msg);
-    }
+    // Log instead of throw to avoid blocking app startup; API routes will still fail with clear errors
     console.error(`[env] ${msg}`);
   }
 

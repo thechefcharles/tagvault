@@ -1,5 +1,6 @@
 import Link from 'next/link';
-import { requireUser } from '@/lib/server/auth';
+import { redirect } from 'next/navigation';
+import { getCurrentUser } from '@/lib/server/auth';
 import { LogoutButton } from '@/components/LogoutButton';
 import { NotificationBell } from '@/components/NotificationBell';
 import { listItems } from '@/lib/db/items';
@@ -12,7 +13,8 @@ export default async function AppPage({
 }: {
   searchParams: Promise<{ type?: string; sort?: string; cursor?: string; limit?: string }>;
 }) {
-  const user = await requireUser();
+  const user = await getCurrentUser();
+  if (!user) redirect('/login');
   const params = await searchParams;
   const type = params.type as 'link' | 'file' | 'note' | undefined;
   const sort = (params.sort as 'recent' | 'priority') || 'recent';
