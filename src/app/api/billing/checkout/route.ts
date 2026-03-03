@@ -1,4 +1,3 @@
-import { NextResponse } from 'next/server';
 import { requireUser } from '@/lib/server/auth';
 import { apiOk, apiError } from '@/lib/api/response';
 import { getStripe } from '@/lib/stripe';
