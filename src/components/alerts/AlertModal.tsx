@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { getErrorMessage } from '@/lib/api/parse-error';
 import type { SavedSearch } from '@/types/saved-search';
 
 export type Alert = {
@@ -86,7 +87,7 @@ export function AlertModal({
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data.error ?? 'Failed to save');
+        throw new Error(getErrorMessage(data, 'Failed to save'));
       }
       onSave();
       onClose();

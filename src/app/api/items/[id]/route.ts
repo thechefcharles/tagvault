@@ -8,6 +8,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { VAULT_BUCKET } from '@/lib/storage/constants';
 import { getItemById, updateItem, deleteItem } from '@/lib/db/items';
 import { updateItemSchema } from '@/lib/db/validators';
+import { assertWithinLimits, incrementUsage, EntitlementError } from '@/lib/entitlements';
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -68,15 +69,35 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       );
     }
 
+    const hasEmbeddingTrigger = parsed.data.title !== undefined || parsed.data.description !== undefined;
+    if (hasEmbeddingTrigger) {
+      try {
+        await assertWithinLimits({ userId: user.id, action: 'embeddings_enqueue' });
+      } catch (e) {
+        if (e instanceof EntitlementError) {
+          return apiError('PLAN_LIMIT_EXCEEDED', e.message, undefined, 402);
+        }
+        throw e;
+      }
+    }
+
     const item = await updateItem({
       userId: user.id,
       id,
       payload: parsed.data,
     });
+
+    if (hasEmbeddingTrigger) {
+      await incrementUsage({ userId: user.id, action: 'embeddings_enqueue' });
+    }
+
     return NextResponse.json(item);
   } catch (err) {
     if (err instanceof Error && err.message === 'Unauthenticated') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    if (err instanceof EntitlementError) {
+      return apiError('PLAN_LIMIT_EXCEEDED', err.message, undefined, 402);
     }
     Sentry.captureException(err);
     return NextResponse.json(

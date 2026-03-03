@@ -1,6 +1,8 @@
 import * as Sentry from '@sentry/nextjs';
 import { NextResponse } from 'next/server';
 import { requireUser } from '@/lib/server/auth';
+import { apiError } from '@/lib/api/response';
+import { assertWithinLimits, incrementUsage, EntitlementError } from '@/lib/entitlements';
 import { getQueryEmbedding } from '@/lib/embeddings';
 import { searchItemsHybrid } from '@/lib/db/search-hybrid';
 
@@ -16,6 +18,17 @@ export async function GET(request: Request) {
     const offset = cursorRaw ? Math.max(0, parseInt(cursorRaw, 10) || 0) : 0;
     const semantic = searchParams.get('semantic') !== 'false';
     let queryEmbedding: number[] | null = null;
+
+    if (q.trim()) {
+      try {
+        await assertWithinLimits({ userId: user.id, action: 'searches_run' });
+      } catch (e) {
+        if (e instanceof EntitlementError) {
+          return apiError('PLAN_LIMIT_EXCEEDED', e.message, undefined, 402);
+        }
+        throw e;
+      }
+    }
 
     if (semantic && q.trim()) {
       queryEmbedding = await getQueryEmbedding(q);
@@ -37,10 +50,17 @@ export async function GET(request: Request) {
     const page = hasMore ? items.slice(0, limit) : items;
     const nextCursor = hasMore ? String(offset + limit) : null;
 
+    if (q.trim()) {
+      await incrementUsage({ userId: user.id, action: 'searches_run' });
+    }
+
     return NextResponse.json({ items: page, nextCursor });
   } catch (err) {
     if (err instanceof Error && err.message === 'Unauthenticated') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    if (err instanceof EntitlementError) {
+      return apiError('PLAN_LIMIT_EXCEEDED', err.message, undefined, 402);
     }
     Sentry.captureException(err);
     return NextResponse.json(

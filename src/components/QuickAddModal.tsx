@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import { getErrorMessage } from '@/lib/api/parse-error';
 
 type Tab = 'note' | 'link' | 'file';
 
@@ -62,7 +63,7 @@ export function QuickAddModal({ open, onClose }: { open: boolean; onClose: () =>
         });
         const data = await res.json();
         if (!res.ok) {
-          setError(data.error || 'Upload failed');
+          setError(getErrorMessage(data, 'Upload failed'));
           setLoading(false);
           return;
         }
@@ -91,14 +92,14 @@ export function QuickAddModal({ open, onClose }: { open: boolean; onClose: () =>
         });
         const data = await res.json();
         if (!res.ok) {
-          setError(data.error || 'Failed to create');
-          if (data.details) {
-            setError(
-              Object.values(data.details.fieldErrors || {})
-                .flat()
-                .join(', '),
-            );
-          }
+          const details = data?.details?.fieldErrors;
+          setError(
+            details
+              ? Object.values(details)
+                  .flat()
+                  .join(', ')
+              : getErrorMessage(data, 'Failed to create'),
+          );
           setLoading(false);
           return;
         }

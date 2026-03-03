@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
+import { getErrorMessage } from '@/lib/api/parse-error';
 import { SavedSearchModal } from '@/components/saved-searches/SavedSearchModal';
 import type { Item } from '@/types/item';
 
@@ -24,6 +25,7 @@ export function SearchClient() {
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [saveModalOpen, setSaveModalOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedQuery(query), DEBOUNCE_MS);
@@ -35,6 +37,7 @@ export function SearchClient() {
   const search = useCallback(
     async (cursor?: string | null, append = false) => {
       setLoading(true);
+      setError(null);
       try {
         const params = new URLSearchParams();
         params.set('q', debouncedQuery);
@@ -47,15 +50,20 @@ export function SearchClient() {
           window.location.href = '/login';
           return;
         }
+        const data = await res.json().catch(() => ({}));
         if (res.ok) {
-          const data = await res.json();
           const list = Array.isArray(data) ? data : (data.items ?? []);
           const nc = data?.nextCursor ?? null;
           setItems(append ? (prev) => [...prev, ...list] : list);
           setNextCursor(nc);
-        } else if (!append) {
-          setItems([]);
-          setNextCursor(null);
+        } else {
+          if (!append) {
+            setItems([]);
+            setNextCursor(null);
+          }
+          if (res.status === 402) {
+            setError(getErrorMessage(data, 'Search limit reached.'));
+          }
         }
       } finally {
         setLoading(false);
@@ -120,6 +128,11 @@ export function SearchClient() {
         }}
       />
 
+      {error && (
+        <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-900/30 dark:text-amber-200">
+          {error}
+        </p>
+      )}
       {loading && items.length === 0 ? (
         <p className="py-8 text-neutral-500">Loading…</p>
       ) : items.length === 0 ? (

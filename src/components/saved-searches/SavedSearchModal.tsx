@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { getErrorMessage } from '@/lib/api/parse-error';
 import type { SavedSearch } from '@/types/saved-search';
 
 type SortOption = 'best_match' | 'priority' | 'recent';
@@ -106,7 +107,7 @@ export function SavedSearchModal({
       const data = await res.json();
 
       if (!res.ok) {
-        setError(data.error ?? 'Failed to save');
+        setError(getErrorMessage(data, 'Failed to save'));
         setLoading(false);
         return;
       }
