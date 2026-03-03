@@ -4,6 +4,11 @@ import { NextResponse, type NextRequest } from 'next/server';
 export async function updateSession(request: NextRequest) {
   const { pathname, searchParams } = request.nextUrl;
 
+  // Root redirect in middleware (avoids root page Server Component execution)
+  if (pathname === '/') {
+    return NextResponse.redirect(new URL('/app', request.url));
+  }
+
   // Auth callback: Supabase redirects with ?code= after email confirmation.
   // Redirect to our callback route to exchange the code for a session.
   const code = searchParams.get('code');
