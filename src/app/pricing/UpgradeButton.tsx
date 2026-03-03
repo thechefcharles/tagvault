@@ -13,7 +13,13 @@ export function UpgradeButton() {
     setError(null);
     try {
       const res = await fetch('/api/billing/checkout', { method: 'POST', credentials: 'include' });
-      const data = await res.json();
+      const text = await res.text();
+      let data: { url?: string; error?: string | { message?: string } } = {};
+      try {
+        data = text ? JSON.parse(text) : {};
+      } catch {
+        /* invalid JSON */
+      }
 
       if (!res.ok) {
         if (res.status === 401) {

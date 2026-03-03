@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { getCurrentUser } from '@/lib/server/auth';
 import { LogoutButton } from '@/components/LogoutButton';
+import { ManageBillingButton } from '@/app/billing/success/ManageBillingButton';
 import Link from 'next/link';
 import { SearchClient } from './SearchClient';
 
@@ -27,7 +28,10 @@ export default async function SearchPage() {
             Saved Searches
           </Link>
         </div>
-        <LogoutButton />
+        <div className="flex items-center gap-2">
+          <ManageBillingButton />
+          <LogoutButton />
+        </div>
       </header>
       <main className="mx-auto max-w-2xl">
         <h1 className="mb-4 text-xl font-semibold">Search</h1>

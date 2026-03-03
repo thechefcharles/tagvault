@@ -9,11 +9,19 @@ export function ManageBillingButton() {
     setLoading(true);
     try {
       const res = await fetch('/api/billing/portal', { method: 'POST', credentials: 'include' });
-      const data = await res.json();
+      const text = await res.text();
+      let data: { url?: string; error?: string | { message?: string } } = {};
+      try {
+        data = text ? JSON.parse(text) : {};
+      } catch {
+        /* invalid JSON - API may have returned non-JSON error */
+      }
 
       if (res.ok && data.url) {
         window.location.href = data.url;
       }
+    } catch {
+      /* network error */
     } finally {
       setLoading(false);
     }
