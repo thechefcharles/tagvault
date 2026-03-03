@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { getErrorMessage } from '@/lib/api/parse-error';
 import type { SavedSearch } from '@/types/saved-search';
 
@@ -31,6 +32,7 @@ export function SavedSearchModal({
   const [filtersJson, setFiltersJson] = useState('{}');
   const [filtersError, setFiltersError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isPlanLimit, setIsPlanLimit] = useState(false);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -58,6 +60,7 @@ export function SavedSearchModal({
     }
     setFiltersError(null);
     setError(null);
+    setIsPlanLimit(false);
   }, [initial, preset, open]);
 
   function parseFilters(): Record<string, unknown> | null {
@@ -108,6 +111,7 @@ export function SavedSearchModal({
 
       if (!res.ok) {
         setError(getErrorMessage(data, 'Failed to save'));
+        setIsPlanLimit(res.status === 402);
         setLoading(false);
         return;
       }
@@ -200,7 +204,19 @@ export function SavedSearchModal({
               <p className="mt-1 text-sm text-red-600 dark:text-red-400">{filtersError}</p>
             )}
           </div>
-          {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+          {error && (
+            <div>
+              <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+              {isPlanLimit && (
+                <Link
+                  href="/pricing"
+                  className="mt-2 inline-block text-sm font-medium underline"
+                >
+                  Upgrade to Pro →
+                </Link>
+              )}
+            </div>
+          )}
           <div className="flex gap-2 pt-2">
             <button
               type="button"

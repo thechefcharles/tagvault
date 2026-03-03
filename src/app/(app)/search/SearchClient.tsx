@@ -26,6 +26,7 @@ export function SearchClient() {
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [saveModalOpen, setSaveModalOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isPlanLimit, setIsPlanLimit] = useState(false);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedQuery(query), DEBOUNCE_MS);
@@ -38,6 +39,7 @@ export function SearchClient() {
     async (cursor?: string | null, append = false) => {
       setLoading(true);
       setError(null);
+      setIsPlanLimit(false);
       try {
         const params = new URLSearchParams();
         params.set('q', debouncedQuery);
@@ -63,6 +65,7 @@ export function SearchClient() {
           }
           if (res.status === 402) {
             setError(getErrorMessage(data, 'Search limit reached.'));
+            setIsPlanLimit(true);
           }
         }
       } finally {
@@ -129,9 +132,17 @@ export function SearchClient() {
       />
 
       {error && (
-        <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-900/30 dark:text-amber-200">
-          {error}
-        </p>
+        <div className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-900/30 dark:text-amber-200">
+          <p>{error}</p>
+          {isPlanLimit && (
+            <Link
+              href="/pricing"
+              className="mt-2 inline-block font-medium underline"
+            >
+              Upgrade to Pro →
+            </Link>
+          )}
+        </div>
       )}
       {loading && items.length === 0 ? (
         <p className="py-8 text-neutral-500">Loading…</p>

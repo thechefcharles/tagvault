@@ -15,6 +15,15 @@
 | `OPENAI_API_KEY` | For semantic search (hybrid search). FTS works without it. |
 | `OPENAI_EMBEDDINGS_MODEL` | Default: `text-embedding-3-small` |
 
+## Stripe Billing (Phase 08B)
+
+| Variable | Notes |
+|----------|-------|
+| `STRIPE_SECRET_KEY` | Stripe secret key (server-only) |
+| `STRIPE_WEBHOOK_SECRET` | Webhook signing secret for `/api/billing/webhook` |
+| `STRIPE_PRICE_PRO_MONTHLY` | Price ID for Pro monthly subscription |
+| `NEXT_PUBLIC_APP_URL` | Base URL for checkout/portal redirects. On Vercel, can fall back to `VERCEL_URL`. |
+
 ## Production hardening (Phase 7)
 
 | Variable | Notes |

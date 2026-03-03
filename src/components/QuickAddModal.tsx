@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { getErrorMessage } from '@/lib/api/parse-error';
 
@@ -22,6 +23,7 @@ export function QuickAddModal({ open, onClose }: { open: boolean; onClose: () =>
   const [priority, setPriority] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isPlanLimit, setIsPlanLimit] = useState(false);
   const [loading, setLoading] = useState(false);
 
   function reset() {
@@ -31,6 +33,7 @@ export function QuickAddModal({ open, onClose }: { open: boolean; onClose: () =>
     setPriority('');
     setFile(null);
     setError(null);
+    setIsPlanLimit(false);
     setLoading(false);
   }
 
@@ -64,6 +67,7 @@ export function QuickAddModal({ open, onClose }: { open: boolean; onClose: () =>
         const data = await res.json();
         if (!res.ok) {
           setError(getErrorMessage(data, 'Upload failed'));
+          setIsPlanLimit(res.status === 402);
           setLoading(false);
           return;
         }
@@ -100,6 +104,7 @@ export function QuickAddModal({ open, onClose }: { open: boolean; onClose: () =>
                   .join(', ')
               : getErrorMessage(data, 'Failed to create'),
           );
+          setIsPlanLimit(res.status === 402);
           setLoading(false);
           return;
         }
@@ -224,7 +229,19 @@ export function QuickAddModal({ open, onClose }: { open: boolean; onClose: () =>
             />
           </div>
 
-          {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+          {error && (
+            <div>
+              <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+              {isPlanLimit && (
+                <Link
+                  href="/pricing"
+                  className="mt-2 inline-block text-sm font-medium text-neutral-900 underline dark:text-neutral-100"
+                >
+                  Upgrade to Pro →
+                </Link>
+              )}
+            </div>
+          )}
 
           <div className="flex gap-2 pt-2">
             <button

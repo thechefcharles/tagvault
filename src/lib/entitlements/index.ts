@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin';
+import { getBillingAccount, isPro } from '@/lib/billing';
 import { getLimit, type Plan } from './limits';
 
 export type Action =
@@ -10,7 +11,11 @@ export type Action =
 
 export type Entitlements = { plan: Plan };
 
+/** Effective plan: billing_accounts (Stripe) is source of truth; user_entitlements for manual overrides. */
 export async function getUserEntitlements(userId: string): Promise<Entitlements> {
+  const billing = await getBillingAccount(userId);
+  if (isPro(billing.plan)) return { plan: 'pro' };
+
   const admin = createAdminClient();
   const { data } = await admin
     .from('user_entitlements')
