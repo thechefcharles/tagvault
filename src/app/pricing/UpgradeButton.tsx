@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { getErrorMessage } from '@/lib/api/parse-error';
 
 export function UpgradeButton() {
   const router = useRouter();
@@ -26,7 +27,7 @@ export function UpgradeButton() {
           router.push('/login?next=/pricing');
           return;
         }
-        setError(data?.error?.message ?? data?.error ?? 'Failed to start checkout');
+        setError(getErrorMessage(data, 'Failed to start checkout'));
         return;
       }
 

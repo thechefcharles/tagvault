@@ -40,6 +40,14 @@ async function ensureProcessed(
   return false;
 }
 
+/** Extract period end from subscription (supports item-level periods in Stripe API 2025+) */
+function getPeriodEnd(
+  sub: { current_period_end?: number; items?: { data?: Array<{ current_period_end?: number }> } },
+): string | null {
+  const end = sub.current_period_end ?? sub.items?.data?.[0]?.current_period_end;
+  return end ? new Date(end * 1000).toISOString() : null;
+}
+
 async function upsertBilling(
   admin: ReturnType<typeof createAdminClient>,
   userId: string,
@@ -100,9 +108,7 @@ export async function POST(request: NextRequest) {
         if (subId) {
           const stripe = getStripe();
           const sub = await stripe.subscriptions.retrieve(subId);
-          const periodEnd = sub.current_period_end
-            ? new Date(sub.current_period_end * 1000).toISOString()
-            : null;
+          const periodEnd = getPeriodEnd(sub);
           await upsertBilling(admin, userId, {
             plan: 'pro',
             stripe_subscription_id: subId,
@@ -122,9 +128,7 @@ export async function POST(request: NextRequest) {
         const userId = await resolveUserId(admin, customerId, sub.metadata);
         if (!userId) break;
 
-        const periodEnd = sub.current_period_end
-          ? new Date(sub.current_period_end * 1000).toISOString()
-          : null;
+        const periodEnd = getPeriodEnd(sub);
 
         const plan = ['active', 'trialing'].includes(sub.status) ? 'pro' : 'free';
         await upsertBilling(admin, userId, {
@@ -154,7 +158,7 @@ export async function POST(request: NextRequest) {
       }
 
       case 'invoice.paid': {
-        const invoice = event.data.object as Stripe.Invoice;
+        const invoice = event.data.object as Stripe.Invoice & { subscription?: string | { id?: string } };
         const customerId = typeof invoice.customer === 'string' ? invoice.customer : invoice.customer?.id;
         if (!customerId) break;
 
@@ -166,9 +170,7 @@ export async function POST(request: NextRequest) {
 
         const stripe = getStripe();
         const sub = await stripe.subscriptions.retrieve(subId);
-        const periodEnd = sub.current_period_end
-          ? new Date(sub.current_period_end * 1000).toISOString()
-          : null;
+        const periodEnd = getPeriodEnd(sub);
 
         await upsertBilling(admin, userId, {
           plan: 'pro',
