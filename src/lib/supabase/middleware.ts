@@ -4,11 +4,6 @@ import { NextResponse, type NextRequest } from 'next/server';
 export async function updateSession(request: NextRequest) {
   const { pathname, searchParams } = request.nextUrl;
 
-  // Root redirect in middleware (avoids root page Server Component execution)
-  if (pathname === '/') {
-    return NextResponse.redirect(new URL('/app', request.url));
-  }
-
   // Auth callback: Supabase redirects with ?code= after email confirmation.
   // Redirect to our callback route to exchange the code for a session.
   const code = searchParams.get('code');
@@ -37,6 +32,7 @@ export async function updateSession(request: NextRequest) {
     pathname.startsWith('/orgs') ||
     pathname.startsWith('/tags') ||
     pathname.startsWith('/collections') ||
+    pathname.startsWith('/settings') ||
     pathname.startsWith('/onboarding') ||
     pathname.startsWith('/admin');
 
@@ -85,6 +81,13 @@ export async function updateSession(request: NextRequest) {
   if ((pathname === '/login' || pathname === '/signup') && user) {
     const url = request.nextUrl.clone();
     url.pathname = '/app';
+    return NextResponse.redirect(url);
+  }
+
+  // Root redirect: send unauthenticated to login, authenticated to app
+  if (pathname === '/') {
+    const url = request.nextUrl.clone();
+    url.pathname = user ? '/app' : '/login';
     return NextResponse.redirect(url);
   }
 

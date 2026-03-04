@@ -77,6 +77,9 @@ export default async function AppPage({
         <Link href="/orgs" className="hover:text-foreground">
           Orgs
         </Link>
+        <Link href="/settings/data" className="hover:text-foreground">
+          Data
+        </Link>
       </nav>
       <main className="mx-auto mt-6 max-w-2xl">
         <VaultClient items={items} nextCursor={nextCursor} type={type} sort={sort} limit={limit} tagIds={tagIds} />

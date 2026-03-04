@@ -17,6 +17,20 @@ export async function requireUser(): Promise<User> {
   return user;
 }
 
+/** Returns true if the user is the owner of the org. Requires active org context. */
+export async function isOrgOwner(activeOrgId: string): Promise<boolean> {
+  const user = await getCurrentUser();
+  if (!user) return false;
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from('org_members')
+    .select('role')
+    .eq('org_id', activeOrgId)
+    .eq('user_id', user.id)
+    .single();
+  return data?.role === 'owner';
+}
+
 /** Requires auth and an active org; ensures personal org exists and profile.active_org_id is set. */
 export async function requireActiveOrg(): Promise<{ user: User; activeOrgId: string }> {
   const user = await requireUser();
