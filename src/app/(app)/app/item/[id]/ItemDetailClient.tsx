@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { DownloadFileButton } from '@/components/DownloadFileButton';
 import { ManageTags } from '@/components/ManageTags';
 import { AddToCollection } from '@/components/AddToCollection';
+import { ItemShareSection } from '@/components/share/ItemShareSection';
 import { TagChips } from '@/components/TagChips';
 import type { Item } from '@/types/item';
 
@@ -82,6 +83,8 @@ export function ItemDetailClient({ item }: { item: ItemWithTags }) {
       )}
 
       {item.type === 'file' && item.storage_path && <DownloadFileButton itemId={item.id} />}
+
+      <ItemShareSection itemId={item.id} />
 
       {item.tags && item.tags.length > 0 && (
         <div>

@@ -16,6 +16,7 @@ export const LIMITS = {
     tags: 20,
     collections: 3,
     collection_shares: 0,
+    item_shares: 0,
   },
   pro: {
     items: 1_000_000,
@@ -27,6 +28,7 @@ export const LIMITS = {
     tags: 200,
     collections: 50,
     collection_shares: 5,
+    item_shares: 25,
   },
   team: {
     items: 1_000_000,
@@ -38,6 +40,7 @@ export const LIMITS = {
     tags: 500,
     collections: 200,
     collection_shares: 50,
+    item_shares: 250,
   },
 } as const;
 

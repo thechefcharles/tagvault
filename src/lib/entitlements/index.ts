@@ -12,7 +12,8 @@ export type Action =
   | 'embeddings_enqueue'
   | 'tags_create'
   | 'collections_create'
-  | 'collection_shares_create';
+  | 'collection_shares_create'
+  | 'item_shares_create';
 
 /** Effective plan for an org: billing_accounts (Stripe) is source of truth. */
 export async function getOrgEntitlements(orgId: string): Promise<Entitlements> {
@@ -168,6 +169,22 @@ export async function assertWithinLimits({
       }
       break;
     }
+    case 'item_shares_create': {
+      const limit = getLimit(plan, 'item_shares');
+      const admin = createAdminClient();
+      const { count } = await admin
+        .from('item_shares')
+        .select('*', { count: 'exact', head: true })
+        .eq('org_id', orgId)
+        .is('revoked_at', null)
+        .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`);
+      if ((count ?? 0) >= limit) {
+        throw new EntitlementError(
+          `Upgrade required: free plan cannot create item share links. Pro/Team plans allow ${limit} active shares.`,
+        );
+      }
+      break;
+    }
   }
 }
 
@@ -180,6 +197,7 @@ const ACTION_COL: Record<Action, string> = {
   tags_create: 'items_created',
   collections_create: 'items_created',
   collection_shares_create: 'items_created',
+  item_shares_create: 'items_created',
 };
 
 /** Increment usage counters. Call after successful action. */
