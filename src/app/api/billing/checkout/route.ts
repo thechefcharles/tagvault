@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { requireUser } from '@/lib/server/auth';
-import { apiOk, apiError } from '@/lib/api/response';
+import { apiOk, apiError, buildApiContext } from '@/lib/api/response';
 import { getStripe } from '@/lib/stripe';
 import { getBillingAccount } from '@/lib/billing';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -20,8 +20,8 @@ function getBaseUrl(request: NextRequest): string {
 }
 
 export async function POST(request: NextRequest) {
-  const requestId = crypto.randomUUID();
   const start = Date.now();
+  const ctx = () => buildApiContext(request, null, null);
   let user: { id: string; email?: string };
   try {
     user = await requireUser();
@@ -30,22 +30,28 @@ export async function POST(request: NextRequest) {
     const ms = Date.now() - start;
     if (e instanceof RateLimitError) {
       logApi({
-        requestId,
+        requestId: request.headers.get('x-request-id') ?? crypto.randomUUID(),
         path: '/api/billing/checkout',
         method: 'POST',
         status: 429,
         ms,
         errorCode: 'RATE_LIMITED',
       });
-      return apiError('RATE_LIMITED', 'Too many requests', { retryAfter: e.retryAfter }, 429);
+      return apiError('RATE_LIMITED', 'Too many requests', { retryAfter: e.retryAfter }, 429, ctx());
     }
-    logApi({ requestId, path: '/api/billing/checkout', method: 'POST', status: 401, ms });
-    return apiError('UNAUTHORIZED', 'Unauthorized', undefined, 401);
+    logApi({
+      requestId: request.headers.get('x-request-id') ?? crypto.randomUUID(),
+      path: '/api/billing/checkout',
+      method: 'POST',
+      status: 401,
+      ms,
+    });
+    return apiError('UNAUTHORIZED', 'Unauthorized', undefined, 401, ctx());
   }
 
   const priceId = process.env.STRIPE_PRICE_PRO_MONTHLY;
   if (!priceId) {
-    return apiError('INTERNAL_ERROR', 'Billing not configured', undefined, 500);
+    return apiError('INTERNAL_ERROR', 'Billing not configured', undefined, 500, ctx());
   }
 
   const stripe = getStripe();
@@ -77,18 +83,24 @@ export async function POST(request: NextRequest) {
 
   if (!session.url) {
     logApi({
-      requestId,
+      requestId: request.headers.get('x-request-id') ?? crypto.randomUUID(),
       userId: user.id,
       path: '/api/billing/checkout',
       method: 'POST',
       status: 500,
       ms: Date.now() - start,
     });
-    return apiError('INTERNAL_ERROR', 'Failed to create checkout session', undefined, 500);
+    return apiError(
+      'INTERNAL_ERROR',
+      'Failed to create checkout session',
+      undefined,
+      500,
+      buildApiContext(request, user, billing),
+    );
   }
 
   logApi({
-    requestId,
+    requestId: request.headers.get('x-request-id') ?? crypto.randomUUID(),
     userId: user.id,
     path: '/api/billing/checkout',
     method: 'POST',

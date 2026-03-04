@@ -20,7 +20,10 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(callbackUrl);
   }
 
-  const response = NextResponse.next({ request });
+  const requestId = crypto.randomUUID();
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set('x-request-id', requestId);
+  const response = NextResponse.next({ request: { headers: requestHeaders } });
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;

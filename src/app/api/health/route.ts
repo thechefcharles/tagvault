@@ -37,7 +37,7 @@ export async function GET() {
   checks.stripe = stripeKey ? 'ok' : 'skip';
 
   return NextResponse.json({
-    status: 'ok',
+    ok: true,
     env,
     time: new Date().toISOString(),
     checks,
