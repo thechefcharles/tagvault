@@ -20,7 +20,10 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(callbackUrl);
   }
 
-  const response = NextResponse.next({ request });
+  const requestId = crypto.randomUUID();
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set('x-request-id', requestId);
+  const response = NextResponse.next({ request: { headers: requestHeaders } });
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -30,7 +33,8 @@ export async function updateSession(request: NextRequest) {
     pathname === '/search' ||
     pathname.startsWith('/saved-searches') ||
     pathname.startsWith('/alerts') ||
-    pathname.startsWith('/notifications');
+    pathname.startsWith('/notifications') ||
+    pathname.startsWith('/admin');
 
   if (!supabaseUrl || !supabaseAnonKey) {
     // Env may be missing in Edge; redirect protected routes to login to avoid "Unauthenticated" throw

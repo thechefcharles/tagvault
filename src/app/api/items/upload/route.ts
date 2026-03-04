@@ -1,7 +1,7 @@
 import * as Sentry from '@sentry/nextjs';
 import { NextResponse } from 'next/server';
 import { requireUser } from '@/lib/server/auth';
-import { checkRateLimit } from '@/lib/api/rate-limit';
+import { checkRateLimit, getRateLimitKey } from '@/lib/api/rate-limit';
 import { apiError } from '@/lib/api/response';
 import { logApi } from '@/lib/apiLog';
 import { assertWithinLimits, incrementUsage, EntitlementError } from '@/lib/entitlements';
@@ -13,10 +13,13 @@ const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 export async function POST(request: Request) {
   const requestId = crypto.randomUUID();
   const start = Date.now();
+  let userId: string | undefined;
   try {
     const user = await requireUser();
-    const limit = await checkRateLimit(`upload:${user.id}`, { limit: 10, windowSec: 60 });
-    if (!limit.ok) {
+    userId = user.id;
+    const key = getRateLimitKey('items:upload', request, user.id);
+    const rl = await checkRateLimit(key, { limit: 10, windowSec: 60 });
+    if (!rl.ok) {
       logApi({
         requestId,
         userId: user.id,
@@ -26,12 +29,14 @@ export async function POST(request: Request) {
         ms: Date.now() - start,
         errorCode: 'RATE_LIMITED',
       });
-      return apiError(
+      const res = apiError(
         'RATE_LIMITED',
         'Too many requests. Please try again later.',
-        { retryAfter: limit.retryAfter },
+        { retry_after_seconds: rl.retryAfter },
         429,
       );
+      rl.headers.forEach((v, k) => res.headers.set(k, v));
+      return res;
     }
     const formData = await request.formData();
 
@@ -130,7 +135,10 @@ export async function POST(request: Request) {
       });
       return apiError('PLAN_LIMIT_EXCEEDED', err.message, undefined, 402);
     }
-    Sentry.captureException(err);
+    Sentry.captureException(err, {
+      tags: { area: 'items' },
+      extra: { route: 'items/upload', ...(userId && { user_id: userId }) },
+    });
     logApi({ requestId, path: '/api/items/upload', method: 'POST', status: 500, ms });
     return NextResponse.json(
       { error: err instanceof Error ? err.message : 'Internal error' },

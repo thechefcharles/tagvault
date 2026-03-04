@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import { requireUser } from '@/lib/server/auth';
 import { listItems, createItem } from '@/lib/db/items';
 import { createItemSchema } from '@/lib/db/validators';
-import { checkRateLimit } from '@/lib/api/rate-limit';
+import { checkRateLimit, getRateLimitKey } from '@/lib/rateLimit';
 import { apiError } from '@/lib/api/response';
 import { assertWithinLimits, incrementUsage, EntitlementError } from '@/lib/entitlements';
 import { logApi } from '@/lib/apiLog';
@@ -55,8 +55,9 @@ export async function POST(request: Request) {
   const start = Date.now();
   try {
     const user = await requireUser();
-    const limit = await checkRateLimit(`items:${user.id}`, { limit: 30, windowSec: 60 });
-    if (!limit.ok) {
+    const key = getRateLimitKey('items', request, user.id);
+    const rl = await checkRateLimit(key, { limit: 30, windowSec: 60 });
+    if (!rl.ok) {
       logApi({
         requestId,
         userId: user.id,
@@ -66,12 +67,14 @@ export async function POST(request: Request) {
         ms: Date.now() - start,
         errorCode: 'RATE_LIMITED',
       });
-      return apiError(
+      const res = apiError(
         'RATE_LIMITED',
         'Too many requests. Please try again later.',
-        { retryAfter: limit.retryAfter },
+        { retry_after_seconds: rl.retryAfter },
         429,
       );
+      rl.headers.forEach((v, k) => res.headers.set(k, v));
+      return res;
     }
     const body = await request.json();
 

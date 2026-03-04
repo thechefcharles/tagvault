@@ -1,7 +1,7 @@
 import * as Sentry from '@sentry/nextjs';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireUser } from '@/lib/server/auth';
-import { checkRateLimit } from '@/lib/api/rate-limit';
+import { checkRateLimit, getRateLimitKey } from '@/lib/api/rate-limit';
 import { apiError } from '@/lib/api/response';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -49,14 +49,17 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const user = await requireUser();
-    const limit = await checkRateLimit(`items:${user.id}`);
-    if (!limit.ok) {
-      return apiError(
+    const key = getRateLimitKey('items', request, user.id);
+    const rl = await checkRateLimit(key, { limit: 30, windowSec: 60 });
+    if (!rl.ok) {
+      const res = apiError(
         'RATE_LIMITED',
         'Too many requests. Please try again later.',
-        { retryAfter: limit.retryAfter },
+        { retry_after_seconds: rl.retryAfter },
         429,
       );
+      rl.headers.forEach((v, k) => res.headers.set(k, v));
+      return res;
     }
     const { id } = await params;
     const body = await request.json();
@@ -108,19 +111,22 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 }
 
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const user = await requireUser();
-    const limit = await checkRateLimit(`items:${user.id}`);
-    if (!limit.ok) {
-      return apiError(
+    const key = getRateLimitKey('items', request, user.id);
+    const rl = await checkRateLimit(key, { limit: 30, windowSec: 60 });
+    if (!rl.ok) {
+      const res = apiError(
         'RATE_LIMITED',
         'Too many requests. Please try again later.',
-        { retryAfter: limit.retryAfter },
+        { retry_after_seconds: rl.retryAfter },
         429,
       );
+      rl.headers.forEach((v, k) => res.headers.set(k, v));
+      return res;
     }
     const { id } = await params;
 

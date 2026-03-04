@@ -5,15 +5,18 @@ import { apiError } from '@/lib/api/response';
 import { assertWithinLimits, incrementUsage, EntitlementError } from '@/lib/entitlements';
 import { getQueryEmbedding } from '@/lib/embeddings';
 import { searchItemsHybrid } from '@/lib/db/search-hybrid';
-import { rateLimitOrThrow, RateLimitError } from '@/lib/rateLimit';
+import { rateLimitOrThrow, RateLimitError, getRateLimitKey } from '@/lib/rateLimit';
 import { logApi } from '@/lib/apiLog';
 
 export async function GET(request: Request) {
   const requestId = crypto.randomUUID();
   const start = Date.now();
+  let userId: string | undefined;
   try {
     const user = await requireUser();
-    await rateLimitOrThrow({ key: `user:${user.id}:search`, limit: 60, windowSec: 60 });
+    userId = user.id;
+    const key = getRateLimitKey('search', request, user.id);
+    const rlResult = await rateLimitOrThrow({ key, limit: 60, windowSec: 60 });
     const { searchParams } = new URL(request.url);
     const q = (searchParams.get('q') ?? '').trim();
     const type = (searchParams.get('type') ?? 'all') as 'link' | 'file' | 'note' | 'all';
@@ -60,6 +63,7 @@ export async function GET(request: Request) {
     }
 
     const res = NextResponse.json({ items: page, nextCursor });
+    if (rlResult?.headers) rlResult.headers.forEach((v, k) => res.headers.set(k, v));
     logApi({
       requestId,
       userId: user.id,
@@ -84,7 +88,11 @@ export async function GET(request: Request) {
         ms,
         errorCode: 'RATE_LIMITED',
       });
-      return apiError('RATE_LIMITED', 'Too many requests', { retryAfter: err.retryAfter }, 429);
+      const res = apiError('RATE_LIMITED', 'Too many requests', {
+        retry_after_seconds: err.retryAfter,
+      }, 429);
+      err.headers.forEach((v, k) => res.headers.set(k, v));
+      return res;
     }
     if (err instanceof EntitlementError) {
       logApi({
@@ -97,7 +105,10 @@ export async function GET(request: Request) {
       });
       return apiError('PLAN_LIMIT_EXCEEDED', err.message, undefined, 402);
     }
-    Sentry.captureException(err);
+    Sentry.captureException(err, {
+      tags: { area: 'search' },
+      extra: userId ? { user_id: userId } : undefined,
+    });
     logApi({ requestId, path: '/api/search', method: 'GET', status: 500, ms });
     return NextResponse.json(
       { error: err instanceof Error ? err.message : 'Internal error' },
