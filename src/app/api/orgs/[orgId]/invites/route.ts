@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireUser } from '@/lib/server/auth';
+import { requireOrgRole } from '@/lib/server/orgAuth';
+import { assertSeatAvailable, SeatLimitExceededError } from '@/lib/server/orgSeats';
 import { createClient } from '@/lib/supabase/server';
 import { z } from 'zod';
 
@@ -13,11 +14,12 @@ export async function POST(
   { params }: { params: Promise<{ orgId: string }> },
 ) {
   try {
-    const user = await requireUser();
     const { orgId } = await params;
     if (!orgId) {
       return NextResponse.json({ error: 'Missing org id' }, { status: 400 });
     }
+
+    await requireOrgRole(orgId, ['owner', 'admin']);
 
     const body = await request.json();
     const parsed = bodySchema.safeParse(body);
@@ -28,21 +30,9 @@ export async function POST(
       );
     }
 
+    await assertSeatAvailable(orgId);
+
     const supabase = await createClient();
-    const { data: myMember } = await supabase
-      .from('org_members')
-      .select('role')
-      .eq('org_id', orgId)
-      .eq('user_id', user.id)
-      .single();
-
-    if (!myMember || !['owner', 'admin'].includes(myMember.role)) {
-      return NextResponse.json(
-        { error: 'Only owner or admin can invite' },
-        { status: 403 },
-      );
-    }
-
     const { data, error } = await supabase.rpc('create_org_invite', {
       p_org_id: orgId,
       p_email: parsed.data.email,
@@ -70,6 +60,19 @@ export async function POST(
   } catch (err) {
     if (err instanceof Error && err.message === 'Unauthenticated') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    if (err instanceof SeatLimitExceededError) {
+      return NextResponse.json(
+        {
+          error: err.message,
+          code: 'PLAN_LIMIT_EXCEEDED',
+          upgrade: true,
+        },
+        { status: 402 },
+      );
+    }
+    if (err instanceof Error && err.message.includes('Forbidden')) {
+      return NextResponse.json({ error: err.message }, { status: 403 });
     }
     return NextResponse.json(
       { error: err instanceof Error ? err.message : 'Internal error' },

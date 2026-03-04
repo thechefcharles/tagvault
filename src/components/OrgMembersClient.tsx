@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
@@ -11,11 +12,18 @@ type PendingInvite = {
   expires_at: string;
   created_at: string;
 };
+type SeatUsage = {
+  membersCount: number;
+  pendingInvitesCount: number;
+  seatLimit: number;
+  overLimit: boolean;
+};
 
 export function OrgMembersClient({
   orgId,
   members,
   pendingInvites,
+  seatUsage,
   currentUserId,
   canManage,
   isOwner,
@@ -23,6 +31,7 @@ export function OrgMembersClient({
   orgId: string;
   members: Member[];
   pendingInvites: PendingInvite[];
+  seatUsage: SeatUsage;
   currentUserId: string;
   canManage: boolean;
   isOwner: boolean;
@@ -32,6 +41,7 @@ export function OrgMembersClient({
   const [inviteRole, setInviteRole] = useState<'member' | 'admin'>('member');
   const [inviteStatus, setInviteStatus] = useState<'idle' | 'loading' | 'error'>('idle');
   const [inviteError, setInviteError] = useState<string | null>(null);
+  const [inviteUpgrade, setInviteUpgrade] = useState(false);
   const [inviteLink, setInviteLink] = useState<string | null>(null);
   const [actionTarget, setActionTarget] = useState<string | null>(null);
 
@@ -40,6 +50,7 @@ export function OrgMembersClient({
     setInviteStatus('loading');
     setInviteError(null);
     setInviteLink(null);
+    setInviteUpgrade(false);
     try {
       const res = await fetch(`/api/orgs/${orgId}/invites`, {
         method: 'POST',
@@ -50,6 +61,7 @@ export function OrgMembersClient({
       if (!res.ok) {
         setInviteStatus('error');
         setInviteError(data.error ?? 'Failed to create invite');
+        setInviteUpgrade(res.status === 402);
         return;
       }
       setInviteLink(data.invite_link ?? null);
@@ -126,10 +138,70 @@ export function OrgMembersClient({
     return canManage;
   };
 
+  async function handleTransfer(newOwnerId: string) {
+    if (!confirm('Transfer ownership to this member? You will become an admin.')) return;
+    setActionTarget(newOwnerId);
+    try {
+      const res = await fetch(`/api/orgs/${orgId}/transfer-ownership`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ new_owner_user_id: newOwnerId }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        alert(data.error ?? 'Failed to transfer');
+      } else {
+        router.refresh();
+      }
+    } finally {
+      setActionTarget(null);
+    }
+  }
+
+  async function handleLeave() {
+    if (!confirm('Leave this organization?')) return;
+    setActionTarget('leave');
+    try {
+      const res = await fetch(`/api/orgs/${orgId}/leave`, { method: 'DELETE' });
+      if (!res.ok) {
+        const data = await res.json();
+        alert(data.error ?? 'Failed to leave');
+      } else {
+        router.push('/orgs');
+        router.refresh();
+      }
+    } finally {
+      setActionTarget(null);
+    }
+  }
+
   return (
     <div className="space-y-8">
+      {seatUsage.overLimit && (
+        <div className="rounded border border-amber-200 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-900/20">
+          <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
+            Seat limit reached ({seatUsage.seatLimit})
+          </p>
+          <p className="mt-1 text-sm text-amber-700 dark:text-amber-300">
+            Upgrade to add more members.
+          </p>
+          <Link
+            href="/pricing"
+            className="mt-2 inline-block text-sm font-medium text-amber-800 underline dark:text-amber-200"
+          >
+            Upgrade plan →
+          </Link>
+        </div>
+      )}
+
       <section>
-        <h2 className="mb-2 text-lg font-medium">Members</h2>
+        <h2 className="mb-2 text-lg font-medium">
+          Members
+          <span className="ml-2 text-sm font-normal text-neutral-500">
+            Seats: {seatUsage.membersCount} / {seatUsage.seatLimit}
+            {seatUsage.pendingInvitesCount > 0 && ` (pending: ${seatUsage.pendingInvitesCount})`}
+          </span>
+        </h2>
         <ul className="divide-y divide-neutral-200 dark:divide-neutral-700">
           {members.map((m) => (
             <li key={m.user_id} className="flex items-center justify-between py-2">
@@ -153,6 +225,16 @@ export function OrgMembersClient({
                     <option value="member">member</option>
                     <option value="admin">admin</option>
                   </select>
+                )}
+                {isOwner && m.role !== 'owner' && (
+                  <button
+                    type="button"
+                    onClick={() => handleTransfer(m.user_id)}
+                    disabled={!!actionTarget}
+                    className="text-sm text-blue-600 hover:underline disabled:opacity-50 dark:text-blue-400"
+                  >
+                    Transfer owner
+                  </button>
                 )}
                 {canRemove(m) && (
                   <button
@@ -211,7 +293,17 @@ export function OrgMembersClient({
               </button>
             </form>
             {inviteStatus === 'error' && inviteError && (
-              <p className="mt-2 text-sm text-red-600 dark:text-red-400">{inviteError}</p>
+              <div className="mt-2">
+                <p className="text-sm text-red-600 dark:text-red-400">{inviteError}</p>
+                {inviteUpgrade && (
+                  <Link
+                    href="/pricing"
+                    className="mt-1 inline-block text-sm font-medium text-blue-600 hover:underline dark:text-blue-400"
+                  >
+                    Upgrade to add more members →
+                  </Link>
+                )}
+              </div>
             )}
             {inviteLink && (
               <div className="mt-2 rounded border border-neutral-200 bg-neutral-50 p-2 dark:border-neutral-700 dark:bg-neutral-800">
@@ -247,6 +339,20 @@ export function OrgMembersClient({
             </section>
           )}
         </>
+      )}
+
+      {!isOwner && (
+        <section>
+          <h2 className="mb-2 text-lg font-medium">Leave organization</h2>
+          <button
+            type="button"
+            onClick={handleLeave}
+            disabled={!!actionTarget}
+            className="rounded border border-red-200 bg-transparent px-4 py-2 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/20"
+          >
+            Leave org
+          </button>
+        </section>
       )}
     </div>
   );

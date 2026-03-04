@@ -2,6 +2,8 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { getBillingAccountForOrg, isPro } from '@/lib/billing';
 import { getLimit, type Plan } from './limits';
 
+export type Entitlements = { plan: Plan; seat_limit: number };
+
 export type Action =
   | 'items_create'
   | 'saved_searches_create'
@@ -9,13 +11,15 @@ export type Action =
   | 'searches_run'
   | 'embeddings_enqueue';
 
-export type Entitlements = { plan: Plan };
-
 /** Effective plan for an org: billing_accounts (Stripe) is source of truth. */
 export async function getOrgEntitlements(orgId: string): Promise<Entitlements> {
   const billing = await getBillingAccountForOrg(orgId);
-  if (isPro(billing)) return { plan: 'pro' };
-  return { plan: 'free' };
+  let plan: Plan = 'free';
+  if (isPro(billing)) {
+    plan = billing.plan === 'team' ? 'team' : 'pro';
+  }
+  const seat_limit = getLimit(plan, 'seats');
+  return { plan, seat_limit };
 }
 
 /** Get usage row for today; creates if missing. Uses admin for upsert (RLS may block insert). */

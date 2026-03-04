@@ -1,5 +1,6 @@
 import Link from 'next/link';
-import { requireUser } from '@/lib/server/auth';
+import { requireOrgMember } from '@/lib/server/orgAuth';
+import { getOrgSeatUsage } from '@/lib/server/orgSeats';
 import { createClient } from '@/lib/supabase/server';
 import { OrgMembersClient } from '@/components/OrgMembersClient';
 import { notFound } from 'next/navigation';
@@ -10,19 +11,10 @@ type Props = { params: Promise<{ id: string }> };
 
 export default async function OrgMembersPage({ params }: Props) {
   const { id: orgId } = await params;
-  const user = await requireUser();
+  const { user, membership: myMember } = await requireOrgMember(orgId);
   const supabase = await createClient();
 
-  const { data: myMember } = await supabase
-    .from('org_members')
-    .select('role')
-    .eq('org_id', orgId)
-    .eq('user_id', user.id)
-    .single();
-
-  if (!myMember) {
-    notFound();
-  }
+  const seatUsage = await getOrgSeatUsage(orgId);
 
   const { data: org } = await supabase
     .from('organizations')
@@ -75,6 +67,7 @@ export default async function OrgMembersPage({ params }: Props) {
           orgId={orgId}
           members={members}
           pendingInvites={invites ?? []}
+          seatUsage={seatUsage}
           currentUserId={user.id}
           canManage={canManage}
           isOwner={isOwner}

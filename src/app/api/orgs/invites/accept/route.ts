@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireUser } from '@/lib/server/auth';
+import { assertSeatAvailable, SeatLimitExceededError } from '@/lib/server/orgSeats';
 import { createClient } from '@/lib/supabase/server';
 import { z } from 'zod';
 
@@ -28,6 +29,14 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = await createClient();
+    const { data: orgIdData } = await supabase.rpc('get_invite_org_if_pending', {
+      p_token: parsed.data.token,
+    });
+    const orgId = orgIdData as string | null;
+    if (orgId) {
+      await assertSeatAvailable(orgId);
+    }
+
     const { data, error } = await supabase.rpc('accept_org_invite', {
       p_token: parsed.data.token,
       p_user_email: email,
@@ -37,6 +46,16 @@ export async function POST(request: NextRequest) {
 
     if (data?.ok === false) {
       const err = data?.error as string;
+      if (err === 'seat_limit_exceeded') {
+        return NextResponse.json(
+          {
+            error: 'Seat limit reached. The organization cannot add more members.',
+            code: 'PLAN_LIMIT_EXCEEDED',
+            upgrade: true,
+          },
+          { status: 402 },
+        );
+      }
       if (err === 'not_logged_in') {
         return NextResponse.json({ error: 'Not logged in' }, { status: 401 });
       }
@@ -65,6 +84,16 @@ export async function POST(request: NextRequest) {
   } catch (err) {
     if (err instanceof Error && err.message === 'Unauthenticated') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    if (err instanceof SeatLimitExceededError) {
+      return NextResponse.json(
+        {
+          error: err.message,
+          code: 'PLAN_LIMIT_EXCEEDED',
+          upgrade: true,
+        },
+        { status: 402 },
+      );
     }
     return NextResponse.json(
       { error: err instanceof Error ? err.message : 'Internal error' },

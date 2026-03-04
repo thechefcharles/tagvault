@@ -5,7 +5,7 @@ import { apiOk, apiError } from '@/lib/api/response';
 import { z } from 'zod';
 
 const bodySchema = z.object({
-  plan: z.enum(['free', 'pro']),
+  plan: z.enum(['free', 'pro', 'team']),
   status: z.string().optional(),
 });
 

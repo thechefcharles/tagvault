@@ -11,7 +11,7 @@ type Props = {
 export function UserOpsClient({ userId, hasStripeCustomer }: Props) {
   const router = useRouter();
   const [resyncing, setResyncing] = useState(false);
-  const [setPlanBusy, setSetPlanBusy] = useState<'free' | 'pro' | null>(null);
+  const [setPlanBusy, setSetPlanBusy] = useState<'free' | 'pro' | 'team' | null>(null);
   const [status, setStatus] = useState<string | null>(null);
 
   async function handleResync() {
@@ -33,7 +33,7 @@ export function UserOpsClient({ userId, hasStripeCustomer }: Props) {
     }
   }
 
-  async function handleSetPlan(plan: 'free' | 'pro') {
+  async function handleSetPlan(plan: 'free' | 'pro' | 'team') {
     setSetPlanBusy(plan);
     setStatus(null);
     try {
@@ -82,6 +82,14 @@ export function UserOpsClient({ userId, hasStripeCustomer }: Props) {
           className="rounded bg-emerald-600 px-3 py-1.5 text-sm text-white hover:bg-emerald-700 disabled:opacity-50"
         >
           {setPlanBusy === 'pro' ? '…' : 'Set Pro'}
+        </button>
+        <button
+          type="button"
+          onClick={() => handleSetPlan('team')}
+          disabled={!!setPlanBusy}
+          className="rounded bg-indigo-600 px-3 py-1.5 text-sm text-white hover:bg-indigo-700 disabled:opacity-50"
+        >
+          {setPlanBusy === 'team' ? '…' : 'Set Team'}
         </button>
       </div>
       {status && (

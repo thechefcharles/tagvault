@@ -39,7 +39,7 @@ CREATE TABLE public.org_invites (
 
 CREATE INDEX idx_org_invites_org_id ON public.org_invites(org_id);
 CREATE INDEX idx_org_invites_email ON public.org_invites(org_id, email);
-CREATE INDEX idx_org_invites_pending ON public.org_invites(org_id) WHERE accepted_at IS NULL AND expires_at > now();
+CREATE INDEX idx_org_invites_pending ON public.org_invites(org_id) WHERE accepted_at IS NULL;
 
 ALTER TABLE public.org_invites ENABLE ROW LEVEL SECURITY;
 

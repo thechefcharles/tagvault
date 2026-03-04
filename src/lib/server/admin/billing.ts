@@ -22,6 +22,7 @@ function getPriceId(sub: { items?: { data?: Array<{ price?: { id?: string } }> }
 export type ResyncResult =
   | { ok: true; plan: 'free'; message: string }
   | { ok: true; plan: 'pro'; status: string }
+  | { ok: true; plan: 'team'; status: string }
   | { ok: false; error: string };
 
 /** Resync billing for a user: uses that user's active org's billing row. */
@@ -76,13 +77,15 @@ export async function resyncBillingFromStripe(userId: string): Promise<ResyncRes
 
   const periodEnd = getPeriodEnd(sub);
   const priceId = getPriceId(sub);
-  let plan: 'free' | 'pro' = 'free';
+  const teamPrice = process.env.STRIPE_PRICE_TEAM_MONTHLY;
+  const planFromPrice = priceId === teamPrice ? 'team' : 'pro';
+  let plan: 'free' | 'pro' | 'team' = 'free';
   if (['active', 'trialing'].includes(sub.status)) {
-    plan = 'pro';
+    plan = planFromPrice;
   } else if (sub.status === 'past_due') {
-    plan = 'pro';
+    plan = planFromPrice;
   } else if (sub.cancel_at_period_end && periodEnd && new Date(periodEnd) > new Date()) {
-    plan = 'pro';
+    plan = planFromPrice;
   }
 
   await admin
@@ -97,8 +100,7 @@ export async function resyncBillingFromStripe(userId: string): Promise<ResyncRes
     })
     .eq('org_id', orgId);
 
-  if (plan === 'pro') {
-    return { ok: true, plan: 'pro', status: sub.status };
-  }
+  if (plan === 'pro') return { ok: true, plan: 'pro', status: sub.status };
+  if (plan === 'team') return { ok: true, plan: 'team', status: sub.status };
   return { ok: true, plan: 'free', message: `Subscription status: ${sub.status}` };
 }

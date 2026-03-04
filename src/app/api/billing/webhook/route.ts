@@ -88,8 +88,23 @@ function getPriceId(sub: Stripe.Subscription): string | null {
   return typeof price === 'object' && price?.id ? price.id : null;
 }
 
+/** Map Stripe price_id to billing plan. Returns free for unknown prices (with Sentry breadcrumb). */
+function priceIdToPlan(priceId: string | null): 'free' | 'pro' | 'team' {
+  if (!priceId) return 'free';
+  const proPrice = process.env.STRIPE_PRICE_PRO_MONTHLY;
+  const teamPrice = process.env.STRIPE_PRICE_TEAM_MONTHLY;
+  if (priceId === proPrice) return 'pro';
+  if (priceId === teamPrice) return 'team';
+  Sentry.addBreadcrumb({
+    category: 'billing',
+    message: 'Unknown Stripe price_id, defaulting to free',
+    data: { price_id: priceId },
+  });
+  return 'free';
+}
+
 type BillingUpdates = {
-  plan?: 'free' | 'pro';
+  plan?: 'free' | 'pro' | 'team';
   stripe_subscription_id?: string | null;
   status?: string | null;
   current_period_end?: string | null;
@@ -221,8 +236,10 @@ async function processWebhookEvent(
           const sub = await stripe.subscriptions.retrieve(subId);
           const periodEnd = getPeriodEnd(sub);
           const priceId = getPriceId(sub);
+          const planFromPrice = priceIdToPlan(priceId);
+          const plan = planFromPrice === 'free' ? 'pro' : planFromPrice;
           await upsertBillingByOrg(admin, orgId, {
-            plan: 'pro',
+            plan,
             stripe_subscription_id: subId,
             status: sub.status,
             current_period_end: periodEnd,
@@ -249,14 +266,16 @@ async function processWebhookEvent(
         const priceId = getPriceId(sub);
         const cancelAtPeriodEnd = sub.cancel_at_period_end ?? false;
 
-        let plan: 'free' | 'pro' = 'free';
+        let plan: 'free' | 'pro' | 'team' = 'free';
+        const planFromPrice = priceIdToPlan(priceId);
+        const paidPlan = planFromPrice === 'free' ? 'pro' : planFromPrice;
         if (['active', 'trialing'].includes(sub.status)) {
-          plan = 'pro';
+          plan = paidPlan;
         } else if (sub.status === 'past_due') {
-          plan = 'pro';
+          plan = paidPlan;
         } else if (sub.status === 'canceled' && cancelAtPeriodEnd && periodEnd) {
           const periodEndDate = new Date(periodEnd);
-          if (periodEndDate > new Date()) plan = 'pro';
+          if (periodEndDate > new Date()) plan = paidPlan;
         }
 
         await upsertBillingByOrg(admin, orgId, {
@@ -314,9 +333,11 @@ async function processWebhookEvent(
         const sub = await stripe.subscriptions.retrieve(subId);
         const periodEnd = getPeriodEnd(sub);
         const priceId = getPriceId(sub);
+        const planFromPrice = priceIdToPlan(priceId);
+        const plan = planFromPrice === 'free' ? 'pro' : planFromPrice;
 
         await upsertBillingByOrg(admin, orgId, {
-          plan: 'pro',
+          plan,
           stripe_subscription_id: subId,
           status: 'active',
           current_period_end: periodEnd,
@@ -340,7 +361,6 @@ async function processWebhookEvent(
 
         const graceEnd = gracePeriodEndsAt();
         await upsertBillingByOrg(admin, orgId, {
-          plan: 'pro',
           status: 'past_due',
           last_payment_status: 'failed',
           grace_period_ends_at: graceEnd,

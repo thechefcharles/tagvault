@@ -45,6 +45,11 @@ export function InviteAcceptClient({
       if (!res.ok) {
         setStatus('error');
         setErrorMessage(data.error ?? 'Failed to accept invite');
+        if (res.status === 402) {
+          setErrorMessage(
+            'Seat limit reached. The organization cannot add more members. Upgrade to add more seats.',
+          );
+        }
         return;
       }
       router.push('/app');
@@ -66,7 +71,15 @@ export function InviteAcceptClient({
         {status === 'loading' ? 'Accepting…' : 'Accept invite'}
       </button>
       {status === 'error' && errorMessage && (
-        <p className="mt-2 text-sm text-red-600 dark:text-red-400">{errorMessage}</p>
+        <div className="mt-2">
+          <p className="text-sm text-red-600 dark:text-red-400">{errorMessage}</p>
+          <Link
+            href="/app"
+            className="mt-2 inline-block text-sm font-medium text-blue-600 hover:underline dark:text-blue-400"
+          >
+            Go to app →
+          </Link>
+        </div>
       )}
     </div>
   );

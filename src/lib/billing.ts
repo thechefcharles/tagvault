@@ -1,6 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin';
 
-export type BillingPlan = 'free' | 'pro';
+export type BillingPlan = 'free' | 'pro' | 'team';
 
 export type BillingAccount = {
   user_id: string;
@@ -18,9 +18,9 @@ export type BillingAccount = {
   updated_at: string;
 };
 
-/** Pro is active when plan=pro AND (status in active/trialing, OR past_due within grace, OR cancel_at_period_end with period not ended). */
+/** Pro/Team is active when plan in (pro,team) AND (status in active/trialing, OR past_due within grace, OR cancel_at_period_end with period not ended). */
 export function isPro(billing: BillingAccount): boolean {
-  if (billing.plan !== 'pro') return false;
+  if (billing.plan !== 'pro' && billing.plan !== 'team') return false;
 
   if (['active', 'trialing'].includes(billing.status ?? '')) return true;
 
@@ -33,6 +33,11 @@ export function isPro(billing: BillingAccount): boolean {
   }
 
   return false;
+}
+
+/** True when plan=team and subscription is active (same conditions as isPro). */
+export function isTeam(billing: BillingAccount): boolean {
+  return billing.plan === 'team' && isPro(billing);
 }
 
 /** Get billing_accounts row for org. Creates one with plan=free if missing (user_id = org owner). */
@@ -102,7 +107,7 @@ function normalizeBillingAccount(row: Record<string, unknown>): BillingAccount {
     org_id: (row.org_id as string) ?? '',
     stripe_customer_id: (row.stripe_customer_id as string | null) ?? null,
     stripe_subscription_id: (row.stripe_subscription_id as string | null) ?? null,
-    plan: ((row.plan as string) === 'pro' ? 'pro' : 'free') as BillingPlan,
+    plan: ((row.plan as string) === 'pro' ? 'pro' : (row.plan as string) === 'team' ? 'team' : 'free') as BillingPlan,
     status: (row.status as string | null) ?? null,
     current_period_end: (row.current_period_end as string | null) ?? null,
     cancel_at_period_end: Boolean(row.cancel_at_period_end),

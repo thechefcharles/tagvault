@@ -56,9 +56,30 @@ export async function POST(request: NextRequest) {
     return apiError('UNAUTHORIZED', 'Unauthorized', undefined, 401, ctx());
   }
 
-  const priceId = process.env.STRIPE_PRICE_PRO_MONTHLY;
+  let plan: 'pro' | 'team' = 'pro';
+  const planParam = request.nextUrl.searchParams.get('plan');
+  if (planParam === 'team') plan = 'team';
+  else {
+    try {
+      const body = await request.json().catch(() => ({}));
+      if (body?.plan === 'team') plan = 'team';
+    } catch {
+      /* ignore */
+    }
+  }
+
+  const priceId =
+    plan === 'team'
+      ? process.env.STRIPE_PRICE_TEAM_MONTHLY
+      : process.env.STRIPE_PRICE_PRO_MONTHLY;
   if (!priceId) {
-    return apiError('INTERNAL_ERROR', 'Billing not configured', undefined, 500, ctx());
+    return apiError(
+      'INTERNAL_ERROR',
+      plan === 'team' ? 'Team billing not configured' : 'Billing not configured',
+      undefined,
+      500,
+      ctx(),
+    );
   }
 
   const stripe = getStripe();
