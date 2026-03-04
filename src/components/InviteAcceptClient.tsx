@@ -44,11 +44,21 @@ export function InviteAcceptClient({
       const data = await res.json();
       if (!res.ok) {
         setStatus('error');
-        setErrorMessage(data.error ?? 'Failed to accept invite');
+        const code = data.code as string | undefined;
         if (res.status === 402) {
           setErrorMessage(
             'Seat limit reached. The organization cannot add more members. Upgrade to add more seats.',
           );
+        } else if (code === 'EXPIRED') {
+          setErrorMessage('This invite has expired. Ask your admin to resend it.');
+        } else if (code === 'EMAIL_MISMATCH') {
+          setErrorMessage(
+            'This invite was sent to a different email address. Log in with that account or ask the admin to resend to your email.',
+          );
+        } else if (code === 'ALREADY_USED') {
+          setErrorMessage('This invite was already used.');
+        } else {
+          setErrorMessage(data.error ?? 'Failed to accept invite');
         }
         return;
       }
@@ -71,11 +81,19 @@ export function InviteAcceptClient({
         {status === 'loading' ? 'Accepting…' : 'Accept invite'}
       </button>
       {status === 'error' && errorMessage && (
-        <div className="mt-2">
+        <div className="mt-2 space-y-2">
           <p className="text-sm text-red-600 dark:text-red-400">{errorMessage}</p>
+          {errorMessage.includes('Upgrade') && (
+            <Link
+              href="/pricing"
+              className="inline-block text-sm font-medium text-blue-600 hover:underline dark:text-blue-400"
+            >
+              Upgrade plan →
+            </Link>
+          )}
           <Link
             href="/app"
-            className="mt-2 inline-block text-sm font-medium text-blue-600 hover:underline dark:text-blue-400"
+            className="mt-2 block text-sm font-medium text-blue-600 hover:underline dark:text-blue-400"
           >
             Go to app →
           </Link>

@@ -19,6 +19,21 @@ type SeatUsage = {
   overLimit: boolean;
 };
 
+const MS_PER_DAY = 86400000;
+const MS_48H = 48 * 60 * 60 * 1000;
+function isExpiringSoon(expiresAt: string): boolean {
+  const t = new Date(expiresAt).getTime();
+  return Number.isFinite(t) && t - Date.now() < MS_48H && t > Date.now();
+}
+function formatExpiry(expiresAt: string): string {
+  const t = new Date(expiresAt).getTime();
+  if (!Number.isFinite(t)) return 'Unknown';
+  const d = Math.ceil((t - Date.now()) / MS_PER_DAY);
+  if (d <= 0) return 'Expired';
+  if (d === 1) return 'Expires in 1 day';
+  return `Expires in ${d} days`;
+}
+
 export function OrgMembersClient({
   orgId,
   members,
@@ -44,6 +59,8 @@ export function OrgMembersClient({
   const [inviteUpgrade, setInviteUpgrade] = useState(false);
   const [inviteLink, setInviteLink] = useState<string | null>(null);
   const [actionTarget, setActionTarget] = useState<string | null>(null);
+  const [resendLinkMap, setResendLinkMap] = useState<Record<string, string>>({});
+  const [actionError, setActionError] = useState<string | null>(null);
 
   async function handleInvite(e: React.FormEvent) {
     e.preventDefault();
@@ -76,16 +93,84 @@ export function OrgMembersClient({
 
   async function revokeInvite(inviteId: string) {
     setActionTarget(inviteId);
+    setActionError(null);
     try {
       const res = await fetch(`/api/orgs/${orgId}/invites/${inviteId}`, {
         method: 'DELETE',
       });
       if (!res.ok) {
         const data = await res.json();
-        alert(data.error ?? 'Failed to revoke');
+        setActionError(data.error ?? 'Failed to revoke');
       } else {
+        setResendLinkMap((m) => {
+          const next = { ...m };
+          delete next[inviteId];
+          return next;
+        });
         router.refresh();
       }
+    } finally {
+      setActionTarget(null);
+    }
+  }
+
+  async function resendInvite(inviteId: string) {
+    setActionTarget(inviteId);
+    setActionError(null);
+    try {
+      const res = await fetch(`/api/orgs/${orgId}/invites/${inviteId}/resend`, {
+        method: 'POST',
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        if (res.status === 402) {
+          setActionError('Seat limit reached. Upgrade to add more members.');
+          return;
+        }
+        if (res.status === 429) {
+          setActionError('Too many requests. Please try again in a minute.');
+          return;
+        }
+        setActionError(data.error ?? 'Failed to resend');
+        return;
+      }
+      const data = await res.json();
+      const link = data.invite_link as string | undefined;
+      if (link) {
+        setResendLinkMap((m) => ({ ...m, [inviteId]: link }));
+        setInviteLink(link);
+      }
+      router.refresh();
+    } finally {
+      setActionTarget(null);
+    }
+  }
+
+  async function copyInviteLink(inviteId: string) {
+    setActionTarget(inviteId);
+    setActionError(null);
+    try {
+      const res = await fetch(`/api/orgs/${orgId}/invites/${inviteId}/resend`, {
+        method: 'POST',
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        if (res.status === 429) {
+          setActionError('Too many requests. Please try again in a minute.');
+          return;
+        }
+        setActionError(data.error ?? 'Failed to get link');
+        return;
+      }
+      const data = await res.json();
+      const link = data.invite_link as string | undefined;
+      if (link) {
+        setResendLinkMap((m) => ({ ...m, [inviteId]: link }));
+        if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+          await navigator.clipboard.writeText(link);
+        }
+      }
+      router.refresh();
     } finally {
       setActionTarget(null);
     }
@@ -316,23 +401,62 @@ export function OrgMembersClient({
           {pendingInvites.length > 0 && (
             <section>
               <h2 className="mb-2 text-lg font-medium">Pending invites</h2>
+              {actionError && (
+                <p className="mb-2 text-sm text-red-600 dark:text-red-400">{actionError}</p>
+              )}
               <ul className="divide-y divide-neutral-200 dark:divide-neutral-700">
                 {pendingInvites.map((inv) => (
-                  <li key={inv.id} className="flex items-center justify-between py-2">
-                    <span>
-                      {inv.email}
-                      <span className="ml-2 rounded bg-neutral-200 px-1.5 py-0.5 text-xs dark:bg-neutral-700">
-                        {inv.role}
-                      </span>
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => revokeInvite(inv.id)}
-                      disabled={!!actionTarget}
-                      className="text-sm text-red-600 hover:underline disabled:opacity-50 dark:text-red-400"
-                    >
-                      Revoke
-                    </button>
+                  <li
+                    key={inv.id}
+                    className={`py-2 ${isExpiringSoon(inv.expires_at) ? 'rounded border border-amber-200 bg-amber-50/50 px-2 dark:border-amber-800 dark:bg-amber-900/10' : ''}`}
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <span className="font-medium">{inv.email}</span>
+                        <span className="ml-2 rounded bg-neutral-200 px-1.5 py-0.5 text-xs dark:bg-neutral-700">
+                          {inv.role}
+                        </span>
+                        <span
+                          className={`ml-2 text-xs ${isExpiringSoon(inv.expires_at) ? 'text-amber-700 dark:text-amber-300' : 'text-neutral-500 dark:text-neutral-400'}`}
+                        >
+                          {formatExpiry(inv.expires_at)}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => copyInviteLink(inv.id)}
+                          disabled={!!actionTarget}
+                          className="text-sm text-blue-600 hover:underline disabled:opacity-50 dark:text-blue-400"
+                        >
+                          Copy link
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => resendInvite(inv.id)}
+                          disabled={!!actionTarget}
+                          className="text-sm text-neutral-600 hover:underline disabled:opacity-50 dark:text-neutral-400"
+                        >
+                          Resend
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => revokeInvite(inv.id)}
+                          disabled={!!actionTarget}
+                          className="text-sm text-red-600 hover:underline disabled:opacity-50 dark:text-red-400"
+                        >
+                          Revoke
+                        </button>
+                      </div>
+                    </div>
+                    {resendLinkMap[inv.id] && (
+                      <div className="mt-2 rounded border border-neutral-200 bg-neutral-50 p-2 dark:border-neutral-700 dark:bg-neutral-800">
+                        <p className="text-xs text-neutral-600 dark:text-neutral-400">
+                          New invite link (share once):
+                        </p>
+                        <code className="mt-1 block break-all text-sm">{resendLinkMap[inv.id]}</code>
+                      </div>
+                    )}
                   </li>
                 ))}
               </ul>

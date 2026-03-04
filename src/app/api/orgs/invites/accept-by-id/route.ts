@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import * as Sentry from '@sentry/nextjs';
 import { requireUser } from '@/lib/server/auth';
 import { assertSeatAvailable, SeatLimitExceededError } from '@/lib/server/orgSeats';
 import { logInviteAudit } from '@/lib/server/inviteAudit';
@@ -7,7 +6,7 @@ import { createClient } from '@/lib/supabase/server';
 import { z } from 'zod';
 
 const bodySchema = z.object({
-  token: z.string().min(1),
+  invite_id: z.string().uuid(),
 });
 
 export async function POST(request: NextRequest) {
@@ -22,70 +21,40 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const email = user.email?.trim().toLowerCase();
-    if (!email) {
-      return NextResponse.json(
-        { error: 'User email required to accept invite' },
-        { status: 400 },
-      );
-    }
-
     const supabase = await createClient();
-    const { data: orgIdData } = await supabase.rpc('get_invite_org_if_pending', {
-      p_token: parsed.data.token,
+    const inviteId = parsed.data.invite_id;
+    const { data: orgId } = await supabase.rpc('get_org_id_for_invite_id_if_recipient', {
+      p_invite_id: inviteId,
     });
-    const orgId = orgIdData as string | null;
     if (orgId) {
       await assertSeatAvailable(orgId);
     }
 
-    const { data, error } = await supabase.rpc('accept_org_invite', {
-      p_token: parsed.data.token,
-      p_user_email: email,
+    const { data, error } = await supabase.rpc('accept_org_invite_by_id', {
+      p_invite_id: inviteId,
     });
 
     if (error) throw error;
 
     if (data?.ok === false) {
       const err = data?.error as string;
-      Sentry.addBreadcrumb({
-        category: 'invite',
-        message: 'accept_org_invite rejected',
-        data: { area: 'orgs', action: 'invite_accept', status: err },
-      });
-      if (err === 'seat_limit_exceeded') {
-        return NextResponse.json(
-          {
-            error: 'Seat limit reached. The organization cannot add more members.',
-            code: 'PLAN_LIMIT_EXCEEDED',
-            upgrade: true,
-          },
-          { status: 402 },
-        );
-      }
-      if (err === 'not_logged_in') {
-        return NextResponse.json({ error: 'Not logged in' }, { status: 401 });
-      }
       if (err === 'email_mismatch') {
         return NextResponse.json(
           { error: 'This invite was sent to a different email address', code: 'EMAIL_MISMATCH' },
           { status: 403 },
         );
       }
-      if (err === 'already_used') {
-        return NextResponse.json(
-          { error: 'Invite already used', code: 'ALREADY_USED' },
-          { status: 400 },
-        );
+      if (err === 'already_used' || err === 'revoked') {
+        return NextResponse.json({ error: 'Invite no longer valid', code: err }, { status: 400 });
       }
       if (err === 'expired') {
         return NextResponse.json(
-          { error: 'This invite has expired. Ask your admin to resend it.', code: 'EXPIRED' },
+          { error: 'This invite has expired.', code: 'EXPIRED' },
           { status: 400 },
         );
       }
-      if (err === 'invalid_token') {
-        return NextResponse.json({ error: 'Invalid invite link', code: 'INVALID_TOKEN' }, { status: 400 });
+      if (err === 'invalid_invite') {
+        return NextResponse.json({ error: 'Invite not found', code: 'INVALID_INVITE' }, { status: 404 });
       }
       return NextResponse.json({ error: err ?? 'Accept failed' }, { status: 400 });
     }
@@ -99,10 +68,7 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    return NextResponse.json({
-      ok: true,
-      org_id: acceptedOrgId,
-    });
+    return NextResponse.json({ ok: true, org_id: acceptedOrgId });
   } catch (err) {
     if (err instanceof Error && err.message === 'Unauthenticated') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -117,9 +83,6 @@ export async function POST(request: NextRequest) {
         { status: 402 },
       );
     }
-    Sentry.captureException(err, {
-      extra: { area: 'orgs', action: 'invite_accept' },
-    });
     return NextResponse.json(
       { error: err instanceof Error ? err.message : 'Internal error' },
       { status: 500 },

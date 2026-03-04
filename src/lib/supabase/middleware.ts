@@ -35,6 +35,7 @@ export async function updateSession(request: NextRequest) {
     pathname.startsWith('/alerts') ||
     pathname.startsWith('/notifications') ||
     pathname.startsWith('/orgs') ||
+    pathname.startsWith('/onboarding') ||
     pathname.startsWith('/admin');
 
   if (!supabaseUrl || !supabaseAnonKey) {

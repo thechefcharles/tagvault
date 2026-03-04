@@ -43,6 +43,7 @@ export default async function OrgMembersPage({ params }: Props) {
     .select('id, email, role, expires_at, created_at')
     .eq('org_id', orgId)
     .is('accepted_at', null)
+    .is('revoked_at', null)
     .gt('expires_at', new Date().toISOString())
     .order('created_at', { ascending: false });
 

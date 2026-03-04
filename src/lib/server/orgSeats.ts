@@ -23,6 +23,7 @@ export async function getOrgSeatUsage(orgId: string): Promise<SeatUsage> {
     .select('*', { count: 'exact', head: true })
     .eq('org_id', orgId)
     .is('accepted_at', null)
+    .is('revoked_at', null)
     .gt('expires_at', new Date().toISOString());
 
   const m = membersCount ?? 0;
