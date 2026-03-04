@@ -1,5 +1,4 @@
 import type { Metadata } from 'next';
-import * as Sentry from '@sentry/nextjs';
 import localFont from 'next/font/local';
 import './globals.css';
 
@@ -17,9 +16,6 @@ const geistMono = localFont({
 export const metadata: Metadata = {
   title: 'TagVault',
   description: 'Store and organize your items with priority and timestamps',
-  other: {
-    ...Sentry.getTraceData(),
-  },
 };
 
 export default function RootLayout({

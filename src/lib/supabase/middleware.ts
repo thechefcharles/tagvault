@@ -61,7 +61,13 @@ export async function updateSession(request: NextRequest) {
         },
       },
     });
-    const { data } = await supabase.auth.getUser();
+    // getUser validates with Supabase; timeout prevents hang if Supabase is unreachable
+    const { data } = await Promise.race([
+      supabase.auth.getUser(),
+      new Promise<{ data: { user: null } }>((resolve) =>
+        setTimeout(() => resolve({ data: { user: null } }), 1500),
+      ),
+    ]);
     user = data.user;
   } catch {
     // Supabase auth failed (e.g. network); treat as unauthenticated

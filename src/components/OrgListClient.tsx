@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
@@ -102,7 +103,15 @@ export function OrgListClient({
                   <span className="ml-2 text-xs text-neutral-500">(active)</span>
                 )}
               </span>
-              <span className="font-mono text-xs text-neutral-500">{org.slug}</span>
+              <span className="flex items-center gap-2">
+                <Link
+                  href={`/orgs/${org.id}/members`}
+                  className="text-sm text-blue-600 hover:underline dark:text-blue-400"
+                >
+                  Members
+                </Link>
+                <span className="font-mono text-xs text-neutral-500">{org.slug}</span>
+              </span>
             </li>
           ))}
           {orgs.length === 0 && (
