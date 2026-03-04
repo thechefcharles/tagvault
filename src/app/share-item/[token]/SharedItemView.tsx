@@ -1,5 +1,7 @@
 'use client';
 
+import { openExternal } from '@/lib/native/openExternal';
+
 function formatDate(s: string) {
   return new Date(s).toLocaleDateString(undefined, {
     month: 'short',
@@ -30,7 +32,7 @@ export function SharedItemView({
     const res = await fetch(`/api/share-item/${token}/download`);
     const data = await res.json();
     if (res.ok && data.url) {
-      window.open(data.url, '_blank');
+      await openExternal(data.url);
     }
   }
 
@@ -56,14 +58,13 @@ export function SharedItemView({
       )}
 
       {item.type === 'link' && item.url && (
-        <a
-          href={item.url}
-          target="_blank"
-          rel="noopener noreferrer"
+        <button
+          type="button"
+          onClick={() => openExternal(item.url!)}
           className="inline-block rounded-md bg-neutral-900 px-4 py-2 text-white hover:bg-neutral-800 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-neutral-200"
         >
           Open link
-        </a>
+        </button>
       )}
 
       {item.type === 'file' && (

@@ -1,5 +1,7 @@
 'use client';
 
+import { openExternal } from '@/lib/native/openExternal';
+
 function formatDate(s: string) {
   return new Date(s).toLocaleDateString(undefined, {
     month: 'short',
@@ -32,7 +34,7 @@ export function SharedCollectionView({
     const res = await fetch(`/api/share/${token}/download/${itemId}`);
     const data = await res.json();
     if (res.ok && data.url) {
-      window.open(data.url, '_blank');
+      await openExternal(data.url);
     }
   }
 
@@ -70,14 +72,13 @@ export function SharedCollectionView({
                 </div>
                 <div className="shrink-0">
                   {item.type === 'link' && item.url && (
-                    <a
-                      href={item.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                    <button
+                      type="button"
+                      onClick={() => openExternal(item.url!)}
                       className="rounded-md bg-neutral-900 px-3 py-1.5 text-sm text-white hover:bg-neutral-800 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-neutral-200"
                     >
                       Open
-                    </a>
+                    </button>
                   )}
                   {item.type === 'file' && (
                     <button

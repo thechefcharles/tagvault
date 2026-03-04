@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { openExternal } from '@/lib/native/openExternal';
 
 export function ManageBillingButton() {
   const [loading, setLoading] = useState(false);
@@ -18,7 +19,7 @@ export function ManageBillingButton() {
       }
 
       if (res.ok && data.url) {
-        window.location.href = data.url;
+        await openExternal(data.url);
       }
     } catch {
       /* network error */

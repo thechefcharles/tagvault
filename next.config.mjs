@@ -1,7 +1,9 @@
 import { withSentryConfig } from '@sentry/nextjs';
 
 /** @type {import('next').NextConfig} */
-const nextConfig = {};
+const nextConfig = {
+  transpilePackages: ['@capacitor/core', '@capacitor/app', '@capacitor/browser'],
+};
 
 export default withSentryConfig(nextConfig, {
   // For all available options, see:

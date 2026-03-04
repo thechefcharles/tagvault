@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { openExternal } from '@/lib/native/openExternal';
 
 export function DownloadFileButton({ itemId }: { itemId: string }) {
   const [loading, setLoading] = useState(false);
@@ -11,7 +12,7 @@ export function DownloadFileButton({ itemId }: { itemId: string }) {
       const res = await fetch(`/api/items/${itemId}/download`);
       const data = await res.json();
       if (res.ok && data.url) {
-        window.open(data.url, '_blank', 'noopener,noreferrer');
+        await openExternal(data.url);
       }
     } finally {
       setLoading(false);

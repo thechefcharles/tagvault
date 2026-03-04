@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
+import { isCapacitor } from '@/lib/native/capacitor';
 
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
@@ -34,6 +35,7 @@ export function InstallPwaButton() {
   const [installed, setInstalled] = useState(false);
 
   const isSharePage = pathname?.startsWith('/share') || pathname?.startsWith('/share-item');
+  const inCapacitor = isCapacitor();
 
   useEffect(() => {
     if (getDismissed()) {
@@ -72,7 +74,7 @@ export function InstallPwaButton() {
     setDeferredPrompt(null);
   };
 
-  if (isSharePage || installed || dismissed || !deferredPrompt) return null;
+  if (inCapacitor || isSharePage || installed || dismissed || !deferredPrompt) return null;
 
   return (
     <div className="flex items-center gap-2 rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-1.5 dark:border-neutral-700 dark:bg-neutral-900">

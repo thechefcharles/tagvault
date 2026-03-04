@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import localFont from 'next/font/local';
 import { PwaRegister } from '@/components/PwaRegister';
+import { CapacitorLinkHandler } from '@/components/native/CapacitorLinkHandler';
 import './globals.css';
 
 const geistSans = localFont({
@@ -43,6 +44,7 @@ export default function RootLayout({
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         {children}
         <PwaRegister />
+        <CapacitorLinkHandler />
       </body>
     </html>
   );
