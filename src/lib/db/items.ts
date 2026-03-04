@@ -11,6 +11,7 @@ export async function listItems({
   sort = 'recent',
   limit = 25,
   cursor,
+  tagIds,
 }: {
   orgId: string;
   userId: string;
@@ -18,10 +19,11 @@ export async function listItems({
   sort?: 'recent' | 'priority';
   limit?: number;
   cursor?: string;
+  tagIds?: string[];
 }): Promise<{ items: Item[]; nextCursor: string | null }> {
   const supabase = await createClient();
   const safeLimit = Math.min(Math.max(1, limit), 100);
-  void userId; // reserved for future use (e.g. filter by creator)
+  void userId;
 
   let query = supabase
     .from('items')
@@ -32,6 +34,17 @@ export async function listItems({
     .limit(safeLimit + 1);
 
   if (type) query = query.eq('type', type);
+
+  if (tagIds?.length) {
+    const { data: itemIds } = await supabase
+      .from('item_tags')
+      .select('item_id')
+      .eq('org_id', orgId)
+      .in('tag_id', tagIds);
+    const ids = Array.from(new Set((itemIds ?? []).map((r) => r.item_id)));
+    if (ids.length === 0) return { items: [], nextCursor: null };
+    query = query.in('id', ids);
+  }
 
   if (cursor) {
     const [cursorCreatedAt] = cursor.split(CURSOR_SEP);
@@ -58,7 +71,31 @@ export async function listItems({
   const last = items[items.length - 1];
   const nextCursor = hasMore && last ? `${last.created_at}${CURSOR_SEP}${last.id}` : null;
 
-  return { items, nextCursor };
+  if (items.length === 0) return { items: [], nextCursor };
+
+  const itemIds = items.map((i) => i.id);
+  const { data: tagRows } = await supabase
+    .from('item_tags')
+    .select('item_id, tags(id, name, slug)')
+    .eq('org_id', orgId)
+    .in('item_id', itemIds);
+
+  const tagsByItem = new Map<string, { id: string; name: string; slug: string }[]>();
+  for (const row of (tagRows ?? []) as { item_id: string; tags?: { id: string; name: string; slug: string } | { id: string; name: string; slug: string }[] | null }[]) {
+    const t = Array.isArray(row.tags) ? row.tags[0] : row.tags;
+    if (t) {
+      const list = tagsByItem.get(row.item_id) ?? [];
+      list.push(t);
+      tagsByItem.set(row.item_id, list);
+    }
+  }
+
+  const itemsWithTags = items.map((i) => ({
+    ...i,
+    tags: tagsByItem.get(i.id) ?? [],
+  }));
+
+  return { items: itemsWithTags, nextCursor };
 }
 
 export async function getItemById({
@@ -67,7 +104,7 @@ export async function getItemById({
 }: {
   orgId: string;
   id: string;
-}): Promise<Item | null> {
+}): Promise<(Item & { tags?: { id: string; name: string; slug: string }[] }) | null> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('items')
@@ -80,7 +117,16 @@ export async function getItemById({
     if (error.code === 'PGRST116') return null;
     throw error;
   }
-  return data as Item;
+
+  const { data: tagRows } = await supabase
+    .from('item_tags')
+    .select('tags(id, name, slug)')
+    .eq('item_id', id)
+    .eq('org_id', orgId);
+  const tags = ((tagRows ?? []) as { tags?: { id: string; name: string; slug: string } | { id: string; name: string; slug: string }[] | null }[])
+    .map((r) => (Array.isArray(r.tags) ? r.tags[0] : r.tags) ?? null)
+    .filter((t): t is { id: string; name: string; slug: string } => !!t);
+  return { ...(data as Item), tags } as Item & { tags: { id: string; name: string; slug: string }[] };
 }
 
 export async function createItem({

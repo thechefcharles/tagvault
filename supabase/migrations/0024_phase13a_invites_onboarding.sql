@@ -96,7 +96,7 @@ CREATE INDEX idx_org_invites_pending ON public.org_invites(org_id)
 
 -- Index for “pending invites for this email” (onboarding)
 CREATE INDEX IF NOT EXISTS idx_org_invites_email_pending ON public.org_invites(email)
-  WHERE accepted_at IS NULL AND revoked_at IS NULL AND expires_at > now();
+  WHERE accepted_at IS NULL AND revoked_at IS NULL;
 
 -- =============================================================================
 -- 5) RPC: get_pending_invites_for_user() — returns pending invites for current user's email

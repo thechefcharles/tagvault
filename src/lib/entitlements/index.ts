@@ -9,7 +9,9 @@ export type Action =
   | 'saved_searches_create'
   | 'alerts_create'
   | 'searches_run'
-  | 'embeddings_enqueue';
+  | 'embeddings_enqueue'
+  | 'tags_create'
+  | 'collections_create';
 
 /** Effective plan for an org: billing_accounts (Stripe) is source of truth. */
 export async function getOrgEntitlements(orgId: string): Promise<Entitlements> {
@@ -128,6 +130,27 @@ export async function assertWithinLimits({
       }
       break;
     }
+    case 'tags_create': {
+      const limit = getLimit(plan, 'tags');
+      const admin = createAdminClient();
+      const { count } = await admin.from('tags').select('*', { count: 'exact', head: true }).eq('org_id', orgId);
+      if ((count ?? 0) >= limit) {
+        throw new EntitlementError(`Upgrade required: free plan limit reached for tags (${limit}).`);
+      }
+      break;
+    }
+    case 'collections_create': {
+      const limit = getLimit(plan, 'collections');
+      const admin = createAdminClient();
+      const { count } = await admin
+        .from('collections')
+        .select('*', { count: 'exact', head: true })
+        .eq('org_id', orgId);
+      if ((count ?? 0) >= limit) {
+        throw new EntitlementError(`Upgrade required: free plan limit reached for collections (${limit}).`);
+      }
+      break;
+    }
   }
 }
 
@@ -137,6 +160,8 @@ const ACTION_COL: Record<Action, string> = {
   alerts_create: 'alerts_created',
   searches_run: 'searches_run',
   embeddings_enqueue: 'embeddings_enqueued',
+  tags_create: 'items_created',
+  collections_create: 'items_created',
 };
 
 /** Increment usage counters. Call after successful action. */

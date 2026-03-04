@@ -22,8 +22,9 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
 
-    const filters = (saved.filters ?? {}) as { type?: string[] };
+    const filters = (saved.filters ?? {}) as { type?: string[]; tag_ids?: string[] };
     const type = filters.type?.[0] ?? 'all';
+    const tagIds = Array.isArray(filters.tag_ids) ? filters.tag_ids : undefined;
 
     let queryEmbedding: number[] | null = null;
     if (saved.semantic_enabled && saved.query?.trim()) {
@@ -40,6 +41,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       offset: 0,
       useSemantic: saved.semantic_enabled,
       queryEmbedding,
+      tagIds,
     });
 
     return NextResponse.json(items);

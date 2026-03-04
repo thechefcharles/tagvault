@@ -13,7 +13,7 @@ export const dynamic = 'force-dynamic';
 export default async function AppPage({
   searchParams,
 }: {
-  searchParams: Promise<{ type?: string; sort?: string; cursor?: string; limit?: string }>;
+  searchParams: Promise<{ type?: string; sort?: string; cursor?: string; limit?: string; tag_ids?: string }>;
 }) {
   const { user, activeOrgId } = await requireActiveOrg();
   const supabase = await createClient();
@@ -35,6 +35,7 @@ export default async function AppPage({
   const sort = (params.sort as 'recent' | 'priority') || 'recent';
   const cursor = params.cursor;
   const limit = params.limit ? Math.min(100, Math.max(1, parseInt(params.limit, 10))) : 25;
+  const tagIds = params.tag_ids ? params.tag_ids.split(',').map((s) => s.trim()).filter(Boolean) : undefined;
 
   const { items, nextCursor } = await listItems({
     orgId: activeOrgId,
@@ -43,6 +44,7 @@ export default async function AppPage({
     sort,
     limit,
     cursor,
+    tagIds,
   });
 
   return (
@@ -56,7 +58,7 @@ export default async function AppPage({
           <LogoutButton />
         </div>
       </header>
-      <nav className="mx-auto mt-2 flex max-w-2xl gap-3 text-sm text-neutral-500 dark:text-neutral-400">
+      <nav className="mx-auto mt-2 flex max-w-2xl flex-wrap gap-3 text-sm text-neutral-500 dark:text-neutral-400">
         <Link href="/search" className="hover:text-foreground">
           Search
         </Link>
@@ -66,12 +68,18 @@ export default async function AppPage({
         <Link href="/alerts" className="hover:text-foreground">
           Alerts
         </Link>
+        <Link href="/tags" className="hover:text-foreground">
+          Tags
+        </Link>
+        <Link href="/collections" className="hover:text-foreground">
+          Collections
+        </Link>
         <Link href="/orgs" className="hover:text-foreground">
           Orgs
         </Link>
       </nav>
       <main className="mx-auto mt-6 max-w-2xl">
-        <VaultClient items={items} nextCursor={nextCursor} type={type} sort={sort} limit={limit} />
+        <VaultClient items={items} nextCursor={nextCursor} type={type} sort={sort} limit={limit} tagIds={tagIds} />
       </main>
     </div>
   );

@@ -21,6 +21,10 @@ export async function GET(request: Request) {
     const q = (searchParams.get('q') ?? '').trim();
     const type = (searchParams.get('type') ?? 'all') as 'link' | 'file' | 'note' | 'all';
     const sort = (searchParams.get('sort') ?? 'best_match') as 'best_match' | 'priority' | 'recent';
+    const tagIdsParam = searchParams.get('tag_ids');
+    const tagIds = tagIdsParam
+      ? tagIdsParam.split(',').map((s) => s.trim()).filter(Boolean)
+      : undefined;
     const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') ?? '50', 10) || 50));
     const cursorRaw = searchParams.get('cursor');
     const offset = cursorRaw ? Math.max(0, parseInt(cursorRaw, 10) || 0) : 0;
@@ -53,6 +57,7 @@ export async function GET(request: Request) {
       offset,
       useSemantic: semantic,
       queryEmbedding,
+      tagIds,
     });
 
     const hasMore = items.length > limit;

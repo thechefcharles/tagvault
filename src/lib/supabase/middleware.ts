@@ -35,6 +35,8 @@ export async function updateSession(request: NextRequest) {
     pathname.startsWith('/alerts') ||
     pathname.startsWith('/notifications') ||
     pathname.startsWith('/orgs') ||
+    pathname.startsWith('/tags') ||
+    pathname.startsWith('/collections') ||
     pathname.startsWith('/onboarding') ||
     pathname.startsWith('/admin');
 

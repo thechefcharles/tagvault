@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { ItemList } from '@/components/ItemList';
 import { QuickAddModal } from '@/components/QuickAddModal';
-import type { Item } from '@/types/item';
+import type { ItemWithTags } from '@/types/item';
 
 export function VaultClient({
   items,
@@ -12,15 +12,17 @@ export function VaultClient({
   type,
   sort,
   limit,
+  tagIds,
 }: {
-  items: Item[];
+  items: ItemWithTags[];
   nextCursor: string | null;
   type?: string;
   sort?: string;
   limit?: number;
+  tagIds?: string[];
 }) {
   const [modalOpen, setModalOpen] = useState(false);
-  const [displayItems, setDisplayItems] = useState<Item[]>(items);
+  const [displayItems, setDisplayItems] = useState<ItemWithTags[]>(items);
   const [displayNextCursor, setDisplayNextCursor] = useState<string | null>(nextCursor);
   const [loadingMore, setLoadingMore] = useState(false);
   const router = useRouter();
@@ -28,7 +30,7 @@ export function VaultClient({
   useEffect(() => {
     setDisplayItems(items);
     setDisplayNextCursor(nextCursor);
-  }, [items, nextCursor]);
+  }, [items, nextCursor, tagIds]);
 
   function handleQuickAddClose() {
     setModalOpen(false);
@@ -44,6 +46,7 @@ export function VaultClient({
       params.set('limit', String(limit ?? 25));
       if (type && type !== 'all') params.set('type', type);
       if (sort) params.set('sort', sort);
+      if (tagIds?.length) params.set('tag_ids', tagIds.join(','));
       const res = await fetch(`/api/items?${params}`);
       const data = await res.json();
       if (res.ok && data.items) {
@@ -71,6 +74,7 @@ export function VaultClient({
         nextCursor={displayNextCursor}
         onLoadMore={handleLoadMore}
         loadingMore={loadingMore}
+        tagIdsFilter={tagIds}
       />
       <QuickAddModal open={modalOpen} onClose={handleQuickAddClose} />
     </>

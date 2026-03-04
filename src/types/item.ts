@@ -1,5 +1,7 @@
 export type ItemType = 'link' | 'file' | 'note';
 
+export type Tag = { id: string; name: string; slug: string };
+
 export type Item = {
   id: string;
   user_id: string;
@@ -13,5 +15,7 @@ export type Item = {
   created_at: string;
   updated_at: string;
 };
+
+export type ItemWithTags = Item & { tags?: Tag[] };
 
 export type ItemWithRelevance = Item & { relevance?: number | null };

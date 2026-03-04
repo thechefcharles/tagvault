@@ -13,6 +13,8 @@ export const LIMITS = {
     searches_per_day: 50,
     embeddings_per_day: 200,
     seats: 1,
+    tags: 20,
+    collections: 3,
   },
   pro: {
     items: 1_000_000,
@@ -21,6 +23,8 @@ export const LIMITS = {
     searches_per_day: 10_000,
     embeddings_per_day: 10_000,
     seats: 1,
+    tags: 200,
+    collections: 50,
   },
   team: {
     items: 1_000_000,
@@ -29,6 +33,8 @@ export const LIMITS = {
     searches_per_day: 10_000,
     embeddings_per_day: 10_000,
     seats: 5,
+    tags: 500,
+    collections: 200,
   },
 } as const;
 

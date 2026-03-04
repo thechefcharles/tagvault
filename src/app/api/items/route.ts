@@ -17,6 +17,10 @@ export async function GET(request: Request) {
     const type = searchParams.get('type') as 'link' | 'file' | 'note' | null;
     const sort = (searchParams.get('sort') as 'recent' | 'priority') ?? 'recent';
     const cursor = searchParams.get('cursor') ?? undefined;
+    const tagIdsParam = searchParams.get('tag_ids');
+    const tagIds = tagIdsParam
+      ? tagIdsParam.split(',').map((s) => s.trim()).filter(Boolean)
+      : undefined;
     const limitParam = searchParams.get('limit');
     const limit = limitParam ? Math.min(100, Math.max(1, parseInt(limitParam, 10))) : 25;
 
@@ -27,6 +31,7 @@ export async function GET(request: Request) {
       sort,
       limit,
       cursor,
+      tagIds,
     });
     const res = NextResponse.json({ items, nextCursor });
     logApi({

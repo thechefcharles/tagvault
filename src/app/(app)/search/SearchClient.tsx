@@ -27,11 +27,19 @@ export function SearchClient() {
   const [saveModalOpen, setSaveModalOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isPlanLimit, setIsPlanLimit] = useState(false);
+  const [tags, setTags] = useState<{ id: string; name: string }[]>([]);
+  const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedQuery(query), DEBOUNCE_MS);
     return () => clearTimeout(t);
   }, [query]);
+
+  useEffect(() => {
+    fetch('/api/tags')
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data) => setTags(Array.isArray(data) ? data : []));
+  }, []);
 
   const q = debouncedQuery.trim();
 
@@ -45,6 +53,7 @@ export function SearchClient() {
         params.set('q', debouncedQuery);
         params.set('semantic', String(semantic));
         if (cursor) params.set('cursor', cursor);
+        if (selectedTagIds.length) params.set('tag_ids', selectedTagIds.join(','));
         const res = await fetch(`/api/search?${params.toString()}`, {
           credentials: 'include',
         });
@@ -72,7 +81,7 @@ export function SearchClient() {
         setLoading(false);
       }
     },
-    [debouncedQuery, semantic],
+    [debouncedQuery, semantic, selectedTagIds],
   );
 
   useEffect(() => {
@@ -83,7 +92,7 @@ export function SearchClient() {
       return;
     }
     search(null, false);
-  }, [debouncedQuery, semantic, search, q]);
+  }, [debouncedQuery, semantic, selectedTagIds, search, q]);
 
   return (
     <div className="space-y-4">
@@ -95,6 +104,32 @@ export function SearchClient() {
           onChange={(e) => setQuery(e.target.value)}
           className="min-w-[200px] flex-1 rounded-md border border-neutral-300 px-3 py-2 dark:border-neutral-600 dark:bg-neutral-800"
         />
+        {tags.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1">
+            <span className="text-sm text-neutral-500">Tags:</span>
+            {tags.map((t) => {
+              const active = selectedTagIds.includes(t.id);
+              return (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() =>
+                    setSelectedTagIds((prev) =>
+                      active ? prev.filter((id) => id !== t.id) : [...prev, t.id],
+                    )
+                  }
+                  className={`rounded px-2 py-0.5 text-xs ${
+                    active
+                      ? 'bg-neutral-900 text-white dark:bg-neutral-100 dark:text-neutral-900'
+                      : 'bg-neutral-200 hover:bg-neutral-300 dark:bg-neutral-700 dark:hover:bg-neutral-600'
+                  }`}
+                >
+                  {t.name}
+                </button>
+              );
+            })}
+          </div>
+        )}
         <label className="flex items-center gap-2 text-sm">
           <input
             type="checkbox"
@@ -128,6 +163,7 @@ export function SearchClient() {
           name: debouncedQuery.slice(0, 50) || undefined,
           query: debouncedQuery,
           semantic_enabled: semantic,
+          filters: selectedTagIds.length ? { tag_ids: selectedTagIds } : {},
         }}
       />
 

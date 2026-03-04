@@ -3,9 +3,14 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { DownloadFileButton } from '@/components/DownloadFileButton';
+import { ManageTags } from '@/components/ManageTags';
+import { AddToCollection } from '@/components/AddToCollection';
+import { TagChips } from '@/components/TagChips';
 import type { Item } from '@/types/item';
 
-export function ItemDetailClient({ item }: { item: Item }) {
+type ItemWithTags = Item & { tags?: { id: string; name: string; slug: string }[] };
+
+export function ItemDetailClient({ item }: { item: ItemWithTags }) {
   const router = useRouter();
   const [title, setTitle] = useState(item.title ?? '');
   const [description, setDescription] = useState(item.description);
@@ -77,6 +82,15 @@ export function ItemDetailClient({ item }: { item: Item }) {
       )}
 
       {item.type === 'file' && item.storage_path && <DownloadFileButton itemId={item.id} />}
+
+      {item.tags && item.tags.length > 0 && (
+        <div>
+          <p className="mb-1 text-sm font-medium">Tags</p>
+          <TagChips tags={item.tags} />
+        </div>
+      )}
+      <ManageTags itemId={item.id} initialTags={item.tags ?? []} />
+      <AddToCollection itemId={item.id} />
 
       <form onSubmit={handleSave} className="space-y-4">
         <div>
