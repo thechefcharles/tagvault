@@ -30,7 +30,8 @@ export async function updateSession(request: NextRequest) {
     pathname === '/search' ||
     pathname.startsWith('/saved-searches') ||
     pathname.startsWith('/alerts') ||
-    pathname.startsWith('/notifications');
+    pathname.startsWith('/notifications') ||
+    pathname.startsWith('/admin');
 
   if (!supabaseUrl || !supabaseAnonKey) {
     // Env may be missing in Edge; redirect protected routes to login to avoid "Unauthenticated" throw
