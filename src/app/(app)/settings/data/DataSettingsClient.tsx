@@ -3,6 +3,13 @@
 import { useState } from 'react';
 import Link from 'next/link';
 
+type Backup = {
+  id: string;
+  created_at: string;
+  size_bytes: number | null;
+  status: string;
+};
+
 type ImportResult = {
   ok: boolean;
   mode?: string;
@@ -10,9 +17,19 @@ type ImportResult = {
   error?: string;
 };
 
-export function DataSettingsClient({ isOwner }: { isOwner: boolean }) {
+export function DataSettingsClient({
+  isOwner,
+  backupsEnabled,
+  backups,
+}: {
+  isOwner: boolean;
+  backupsEnabled: boolean;
+  backups: Backup[];
+}) {
   const [importing, setImporting] = useState(false);
   const [replaceMode, setReplaceMode] = useState(false);
+  const [restoring, setRestoring] = useState<string | null>(null);
+  const [restoreReplaceId, setRestoreReplaceId] = useState<string | null>(null);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const handleExport = () => {
@@ -74,6 +91,41 @@ export function DataSettingsClient({ isOwner }: { isOwner: boolean }) {
     }
   };
 
+  const handleRestore = async (backupId: string, mode: 'merge' | 'replace') => {
+    if (mode === 'replace' && !isOwner) return;
+    setRestoring(backupId);
+    setMessage(null);
+    try {
+      const res = await fetch(`/api/backups/${backupId}/restore`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode }),
+      });
+      const data = (await res.json()) as ImportResult & { imported?: Record<string, number> };
+      if (!res.ok) {
+        setMessage({ type: 'error', text: data.error ?? `Restore failed (${res.status})` });
+        return;
+      }
+      const counts = data.imported
+        ? `Items: ${data.imported.items ?? 0}, Tags: ${data.imported.tags ?? 0}`
+        : '';
+      setMessage({ type: 'success', text: `Restore complete (${mode}). ${counts}` });
+      setRestoreReplaceId(null);
+      window.location.reload();
+    } catch (err) {
+      setMessage({ type: 'error', text: err instanceof Error ? err.message : 'Restore failed' });
+    } finally {
+      setRestoring(null);
+    }
+  };
+
+  const formatSize = (bytes: number | null) => {
+    if (bytes == null) return '—';
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
   return (
     <div className="space-y-8">
       <section>
@@ -129,6 +181,113 @@ export function DataSettingsClient({ isOwner }: { isOwner: boolean }) {
           {importing ? 'Importing…' : 'Choose file to import'}
         </label>
       </section>
+
+      <section>
+        <h2 className="mb-2 text-lg font-medium">Backups</h2>
+        {!backupsEnabled ? (
+          <>
+            <p className="mb-4 text-sm text-neutral-500 dark:text-neutral-400">
+              Automated nightly backups are available for Pro and Team plans. Upgrade to keep up to 30 (Pro) or 90
+              (Team) restore points.
+            </p>
+            <Link
+              href="/pricing"
+              className="inline-block rounded-md bg-neutral-900 px-4 py-2 text-sm text-white hover:bg-neutral-800 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-neutral-200"
+            >
+              Upgrade to Pro
+            </Link>
+          </>
+        ) : (
+          <>
+            <p className="mb-4 text-sm text-neutral-500 dark:text-neutral-400">
+              Nightly backups are created automatically. Download or restore from a backup below.
+            </p>
+            {backups.length === 0 ? (
+              <p className="text-sm text-neutral-500">No backups yet. Run the nightly cron or wait for the next run.</p>
+            ) : (
+              <div className="overflow-x-auto rounded-md border border-neutral-200 dark:border-neutral-700">
+                <table className="min-w-full text-sm">
+                  <thead className="bg-neutral-50 dark:bg-neutral-800/50">
+                    <tr>
+                      <th className="px-4 py-2 text-left font-medium">Date</th>
+                      <th className="px-4 py-2 text-left font-medium">Size</th>
+                      <th className="px-4 py-2 text-left font-medium">Status</th>
+                      <th className="px-4 py-2 text-right font-medium">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {backups.map((b) => (
+                      <tr key={b.id} className="border-t border-neutral-200 dark:border-neutral-700">
+                        <td className="px-4 py-2">{new Date(b.created_at).toLocaleString()}</td>
+                        <td className="px-4 py-2">{formatSize(b.size_bytes)}</td>
+                        <td className="px-4 py-2">{b.status === 'ok' ? 'OK' : 'Failed'}</td>
+                        <td className="px-4 py-2 text-right">
+                          {b.status === 'ok' && (
+                            <>
+                              <a
+                                href={`/api/backups/${b.id}/download`}
+                                className="mr-2 text-blue-600 hover:underline dark:text-blue-400"
+                              >
+                                Download
+                              </a>
+                              <button
+                                type="button"
+                                onClick={() => handleRestore(b.id, 'merge')}
+                                disabled={restoring !== null}
+                                className="mr-2 text-blue-600 hover:underline disabled:opacity-50 dark:text-blue-400"
+                              >
+                                Restore (Merge)
+                              </button>
+                              {isOwner && (
+                                <>
+                                  {restoreReplaceId === b.id ? (
+                                    <>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleRestore(b.id, 'replace')}
+                                        disabled={restoring !== null}
+                                        className="mr-2 font-medium text-amber-600 hover:underline disabled:opacity-50 dark:text-amber-400"
+                                      >
+                                        Confirm Replace
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => setRestoreReplaceId(null)}
+                                        className="text-neutral-500 hover:underline"
+                                      >
+                                        Cancel
+                                      </button>
+                                    </>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => setRestoreReplaceId(b.id)}
+                                      className="text-amber-600 hover:underline dark:text-amber-400"
+                                    >
+                                      Restore (Replace)
+                                    </button>
+                                  )}
+                                </>
+                              )}
+                            </>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </>
+        )}
+      </section>
+
+      {restoreReplaceId && (
+        <p className="text-sm font-medium text-amber-600 dark:text-amber-400">
+          Warning: Replace will delete all current data and restore from the backup. Click Confirm Replace to
+          proceed.
+        </p>
+      )}
 
       {message && (
         <div

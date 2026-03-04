@@ -3,6 +3,10 @@
     {
       "path": "/api/alerts/process-due",
       "schedule": "0 12 * * *"
+    },
+    {
+      "path": "/api/backups/process-nightly",
+      "schedule": "0 3 * * *"
     }
   ]
 }

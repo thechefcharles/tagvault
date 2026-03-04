@@ -5,8 +5,15 @@
 
 export type Plan = 'free' | 'pro' | 'team';
 
+export const BACKUP_RETENTION_DAYS = {
+  free: 0,
+  pro: 30,
+  team: 90,
+} as const;
+
 export const LIMITS = {
   free: {
+    backups_enabled: false,
     items: 100,
     saved_searches: 5,
     alerts: 2,
@@ -19,6 +26,7 @@ export const LIMITS = {
     item_shares: 0,
   },
   pro: {
+    backups_enabled: true,
     items: 1_000_000,
     saved_searches: 1_000,
     alerts: 100,
@@ -31,6 +39,7 @@ export const LIMITS = {
     item_shares: 25,
   },
   team: {
+    backups_enabled: true,
     items: 1_000_000,
     saved_searches: 1_000,
     alerts: 100,
@@ -44,7 +53,18 @@ export const LIMITS = {
   },
 } as const;
 
-export function getLimit(plan: Plan, key: keyof (typeof LIMITS)['free']): number {
+type NumericLimitKey = Exclude<keyof (typeof LIMITS)['free'], 'backups_enabled'>;
+
+export function getLimit(plan: Plan, key: NumericLimitKey): number {
   const limits = plan in LIMITS ? LIMITS[plan] : LIMITS.free;
-  return limits[key];
+  return limits[key] as number;
+}
+
+export function getBackupsEnabled(plan: Plan): boolean {
+  const limits = plan in LIMITS ? LIMITS[plan] : LIMITS.free;
+  return Boolean(limits.backups_enabled);
+}
+
+export function getBackupRetentionDays(plan: Plan): number {
+  return plan in BACKUP_RETENTION_DAYS ? BACKUP_RETENTION_DAYS[plan] : 0;
 }

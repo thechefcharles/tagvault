@@ -1,4 +1,7 @@
 import { requireActiveOrg, isOrgOwner } from '@/lib/server/auth';
+import { getOrgEntitlements } from '@/lib/entitlements';
+import { getBackupsEnabled } from '@/lib/entitlements/limits';
+import { createClient } from '@/lib/supabase/server';
 import { DataSettingsClient } from './DataSettingsClient';
 
 export const dynamic = 'force-dynamic';
@@ -6,6 +9,18 @@ export const dynamic = 'force-dynamic';
 export default async function SettingsDataPage() {
   const { activeOrgId } = await requireActiveOrg();
   const owner = await isOrgOwner(activeOrgId);
+  const { plan } = await getOrgEntitlements(activeOrgId);
+  const backupsEnabled = getBackupsEnabled(plan);
+
+  const supabase = await createClient();
+  const { data: backups } = backupsEnabled
+    ? await supabase
+        .from('org_backups')
+        .select('id, created_at, size_bytes, status')
+        .eq('org_id', activeOrgId)
+        .order('created_at', { ascending: false })
+        .limit(50)
+    : { data: [] };
 
   return (
     <div className="min-h-screen p-6">
@@ -16,7 +31,11 @@ export default async function SettingsDataPage() {
         </p>
       </header>
       <main className="mx-auto max-w-2xl">
-        <DataSettingsClient isOwner={owner} />
+        <DataSettingsClient
+          isOwner={owner}
+          backupsEnabled={backupsEnabled}
+          backups={backups ?? []}
+        />
       </main>
     </div>
   );
