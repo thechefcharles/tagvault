@@ -6,13 +6,26 @@ import { assertWithinLimits, incrementUsage, EntitlementError } from '@/lib/enti
 import { createClient } from '@/lib/supabase/server';
 import { z } from 'zod';
 
-const createSchema = z.object({
-  saved_search_id: z.string().uuid(),
-  name: z.string().min(1).max(200),
-  frequency_minutes: z.number().int().min(15).max(10080).default(60),
-  enabled: z.boolean().default(true),
-  notify_on_new: z.boolean().default(true),
-});
+const createSchema = z
+  .object({
+    source_type: z.enum(['saved_search', 'collection', 'tag_filter']).default('saved_search'),
+    source_id: z.string().uuid().nullable().optional(),
+    saved_search_id: z.string().uuid().nullable().optional(),
+    tag_ids: z.array(z.string().uuid()).optional(),
+    name: z.string().min(1).max(200),
+    frequency_minutes: z.number().int().min(15).max(10080).default(60),
+    enabled: z.boolean().default(true),
+    notify_on_new: z.boolean().default(true),
+  })
+  .refine(
+    (d) => {
+      if (d.source_type === 'saved_search') return !!(d.source_id ?? d.saved_search_id);
+      if (d.source_type === 'collection') return !!d.source_id;
+      if (d.source_type === 'tag_filter') return !!d.tag_ids?.length;
+      return false;
+    },
+    { message: 'saved_search needs source_id or saved_search_id; collection needs source_id; tag_filter needs tag_ids' },
+  );
 
 export async function GET() {
   try {
@@ -53,16 +66,41 @@ export async function POST(request: Request) {
     }
 
     const supabase = await createClient();
+    const { source_type, source_id, saved_search_id, tag_ids } = parsed.data;
 
-    const { data: saved } = await supabase
-      .from('saved_searches')
-      .select('id')
-      .eq('id', parsed.data.saved_search_id)
-      .eq('org_id', activeOrgId)
-      .single();
-
-    if (!saved) {
-      return NextResponse.json({ error: 'Saved search not found' }, { status: 404 });
+    if (source_type === 'saved_search') {
+      const searchId = source_id ?? saved_search_id;
+      if (!searchId) {
+        return NextResponse.json({ error: 'Saved search required' }, { status: 400 });
+      }
+      const { data: saved } = await supabase
+        .from('saved_searches')
+        .select('id')
+        .eq('id', searchId)
+        .eq('org_id', activeOrgId)
+        .single();
+      if (!saved) {
+        return NextResponse.json({ error: 'Saved search not found' }, { status: 404 });
+      }
+    } else if (source_type === 'collection' && source_id) {
+      const { data: col } = await supabase
+        .from('collections')
+        .select('id')
+        .eq('id', source_id)
+        .eq('org_id', activeOrgId)
+        .single();
+      if (!col) {
+        return NextResponse.json({ error: 'Collection not found' }, { status: 404 });
+      }
+    } else if (source_type === 'tag_filter' && tag_ids?.length) {
+      const { data: tags } = await supabase
+        .from('tags')
+        .select('id')
+        .eq('org_id', activeOrgId)
+        .in('id', tag_ids);
+      if (!tags || tags.length !== tag_ids.length) {
+        return NextResponse.json({ error: 'One or more tags not found' }, { status: 404 });
+      }
     }
 
     try {
@@ -74,12 +112,16 @@ export async function POST(request: Request) {
       throw e;
     }
 
+    const searchId = source_type === 'saved_search' ? (source_id ?? saved_search_id) : null;
     const { data: alert, error } = await supabase
       .from('alerts')
       .insert({
         owner_user_id: null,
         org_id: activeOrgId,
-        saved_search_id: parsed.data.saved_search_id,
+        saved_search_id: searchId,
+        source_type,
+        source_id: source_type === 'saved_search' ? searchId : source_type === 'collection' ? source_id : null,
+        tag_ids: source_type === 'tag_filter' ? tag_ids : null,
         name: parsed.data.name,
         frequency_minutes: parsed.data.frequency_minutes,
         enabled: parsed.data.enabled,

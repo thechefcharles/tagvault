@@ -117,9 +117,13 @@ export default function AlertsPage() {
                       )}
                     </div>
                     <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">
-                      {typeof alert.saved_searches === 'object' && alert.saved_searches
-                        ? alert.saved_searches.name
-                        : 'Saved search'}
+                      {alert.source_type === 'collection'
+                        ? 'Collection'
+                        : alert.source_type === 'tag_filter'
+                          ? 'Tag filter'
+                          : typeof alert.saved_searches === 'object' && alert.saved_searches
+                            ? alert.saved_searches.name
+                            : 'Saved search'}
                       {' · '}
                       {FREQ_LABELS[alert.frequency_minutes] ?? `${alert.frequency_minutes} min`}
                     </p>

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { ItemList } from '@/components/ItemList';
 import { QuickAddModal } from '@/components/QuickAddModal';
+import { AlertModal } from '@/components/alerts/AlertModal';
 import type { ItemWithTags } from '@/types/item';
 
 export function VaultClient({
@@ -22,6 +23,7 @@ export function VaultClient({
   tagIds?: string[];
 }) {
   const [modalOpen, setModalOpen] = useState(false);
+  const [alertModalOpen, setAlertModalOpen] = useState(false);
   const [displayItems, setDisplayItems] = useState<ItemWithTags[]>(items);
   const [displayNextCursor, setDisplayNextCursor] = useState<string | null>(nextCursor);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -60,7 +62,16 @@ export function VaultClient({
 
   return (
     <>
-      <div className="mb-4 flex justify-end">
+      <div className="mb-4 flex justify-end gap-2">
+        {tagIds?.length ? (
+          <button
+            type="button"
+            onClick={() => setAlertModalOpen(true)}
+            className="rounded-md border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-100 dark:border-neutral-600 dark:hover:bg-neutral-800"
+          >
+            Create alert for these tags
+          </button>
+        ) : null}
         <button
           type="button"
           onClick={() => setModalOpen(true)}
@@ -77,6 +88,16 @@ export function VaultClient({
         tagIdsFilter={tagIds}
       />
       <QuickAddModal open={modalOpen} onClose={handleQuickAddClose} />
+      <AlertModal
+        open={alertModalOpen}
+        onClose={() => setAlertModalOpen(false)}
+        onSave={() => {
+          setAlertModalOpen(false);
+          router.refresh();
+        }}
+        savedSearches={[]}
+        presetSource={tagIds?.length ? { type: 'tag_filter', tagIds } : undefined}
+      />
     </>
   );
 }

@@ -7,7 +7,10 @@ import type { SavedSearch } from '@/types/saved-search';
 
 export type Alert = {
   id: string;
-  saved_search_id: string;
+  saved_search_id: string | null;
+  source_type?: 'saved_search' | 'collection' | 'tag_filter';
+  source_id?: string | null;
+  tag_ids?: string[] | null;
   name: string;
   frequency_minutes: number;
   enabled: boolean;
@@ -16,6 +19,11 @@ export type Alert = {
   next_run_at: string;
   saved_searches?: { id: string; name: string; query?: string } | null;
 };
+
+export type AlertPresetSource =
+  | { type: 'saved_search'; savedSearchId: string }
+  | { type: 'collection'; collectionId: string; collectionName: string }
+  | { type: 'tag_filter'; tagIds: string[]; tagNames?: string[] };
 
 const FREQUENCY_OPTIONS = [
   { value: 15, label: 'Every 15 min' },
@@ -32,6 +40,7 @@ export function AlertModal({
   initial,
   savedSearches,
   presetSavedSearchId,
+  presetSource,
 }: {
   open: boolean;
   onClose: () => void;
@@ -39,6 +48,7 @@ export function AlertModal({
   initial?: Alert | null;
   savedSearches: SavedSearch[];
   presetSavedSearchId?: string;
+  presetSource?: AlertPresetSource;
 }) {
   const [name, setName] = useState('');
   const [savedSearchId, setSavedSearchId] = useState('');
@@ -52,12 +62,17 @@ export function AlertModal({
   useEffect(() => {
     if (initial) {
       setName(initial.name);
-      setSavedSearchId(initial.saved_search_id);
+      setSavedSearchId(initial.saved_search_id ?? presetSavedSearchId ?? savedSearches[0]?.id ?? '');
       setFrequencyMinutes(initial.frequency_minutes);
       setEnabled(initial.enabled);
       setNotifyOnNew(initial.notify_on_new);
     } else {
-      setName('');
+      let defaultName = '';
+      if (presetSource?.type === 'collection') defaultName = `New in ${presetSource.collectionName}`;
+      else if (presetSource?.type === 'tag_filter' && presetSource.tagNames?.length)
+        defaultName = `Items tagged ${presetSource.tagNames.slice(0, 2).join(', ')}${presetSource.tagNames.length > 2 ? '…' : ''}`;
+      else if (presetSource?.type === 'tag_filter') defaultName = `${presetSource.tagIds.length} tags`;
+      setName(defaultName);
       setSavedSearchId(presetSavedSearchId ?? savedSearches[0]?.id ?? '');
       setFrequencyMinutes(60);
       setEnabled(true);
@@ -65,7 +80,7 @@ export function AlertModal({
     }
     setError(null);
     setIsPlanLimit(false);
-  }, [initial, savedSearches, presetSavedSearchId, open]);
+  }, [initial, savedSearches, presetSavedSearchId, presetSource, open]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -74,15 +89,38 @@ export function AlertModal({
     try {
       const url = initial ? `/api/alerts/${initial.id}` : '/api/alerts';
       const method = initial ? 'PATCH' : 'POST';
-      const body = initial
-        ? { name, frequency_minutes: frequencyMinutes, enabled, notify_on_new: notifyOnNew }
-        : {
-            saved_search_id: savedSearchId,
-            name,
-            frequency_minutes: frequencyMinutes,
-            enabled,
-            notify_on_new: notifyOnNew,
-          };
+      let body: Record<string, unknown>;
+      if (initial) {
+        body = { name, frequency_minutes: frequencyMinutes, enabled, notify_on_new: notifyOnNew };
+      } else if (presetSource?.type === 'collection') {
+        body = {
+          source_type: 'collection',
+          source_id: presetSource.collectionId,
+          name,
+          frequency_minutes: frequencyMinutes,
+          enabled,
+          notify_on_new: notifyOnNew,
+        };
+      } else if (presetSource?.type === 'tag_filter') {
+        body = {
+          source_type: 'tag_filter',
+          tag_ids: presetSource.tagIds,
+          name,
+          frequency_minutes: frequencyMinutes,
+          enabled,
+          notify_on_new: notifyOnNew,
+        };
+      } else {
+        body = {
+          source_type: 'saved_search',
+          saved_search_id: savedSearchId,
+          source_id: savedSearchId,
+          name,
+          frequency_minutes: frequencyMinutes,
+          enabled,
+          notify_on_new: notifyOnNew,
+        };
+      }
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
@@ -128,23 +166,59 @@ export function AlertModal({
               required
             />
           </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium">Saved search</label>
-            <select
-              value={savedSearchId}
-              onChange={(e) => setSavedSearchId(e.target.value)}
-              className="w-full rounded-md border border-neutral-300 px-3 py-2 dark:border-neutral-600 dark:bg-neutral-800"
-              disabled={!!initial}
-              required
-            >
-              <option value="">Select…</option>
-              {savedSearches.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
-          </div>
+          {!presetSource ? (
+            <div>
+              <label className="mb-1 block text-sm font-medium">Saved search</label>
+              <select
+                value={savedSearchId}
+                onChange={(e) => setSavedSearchId(e.target.value)}
+                className="w-full rounded-md border border-neutral-300 px-3 py-2 dark:border-neutral-600 dark:bg-neutral-800"
+                disabled={!!initial}
+                required
+              >
+                <option value="">Select…</option>
+                {savedSearches.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : presetSource.type === 'collection' ? (
+            <div>
+              <label className="mb-1 block text-sm font-medium">Source</label>
+              <p className="rounded-md border border-neutral-300 px-3 py-2 text-sm dark:border-neutral-600 dark:bg-neutral-800">
+                Collection: {presetSource.collectionName}
+              </p>
+            </div>
+          ) : presetSource.type === 'tag_filter' ? (
+            <div>
+              <label className="mb-1 block text-sm font-medium">Source</label>
+              <p className="rounded-md border border-neutral-300 px-3 py-2 text-sm dark:border-neutral-600 dark:bg-neutral-800">
+                {presetSource.tagNames?.length
+                  ? `Tags: ${presetSource.tagNames.join(', ')}`
+                  : `${presetSource.tagIds.length} tag${presetSource.tagIds.length !== 1 ? 's' : ''} selected`}
+              </p>
+            </div>
+          ) : (
+            <div>
+              <label className="mb-1 block text-sm font-medium">Saved search</label>
+              <select
+                value={savedSearchId}
+                onChange={(e) => setSavedSearchId(e.target.value)}
+                className="w-full rounded-md border border-neutral-300 px-3 py-2 dark:border-neutral-600 dark:bg-neutral-800"
+                disabled={!!initial}
+                required
+              >
+                <option value="">Select…</option>
+                {savedSearches.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           <div>
             <label className="mb-1 block text-sm font-medium">Frequency</label>
             <select

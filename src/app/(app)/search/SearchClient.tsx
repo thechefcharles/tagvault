@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { getErrorMessage } from '@/lib/api/parse-error';
 import { SavedSearchModal } from '@/components/saved-searches/SavedSearchModal';
+import { AlertModal } from '@/components/alerts/AlertModal';
 import type { Item } from '@/types/item';
 
 const DEBOUNCE_MS = 350;
@@ -25,6 +26,7 @@ export function SearchClient() {
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [saveModalOpen, setSaveModalOpen] = useState(false);
+  const [alertModalOpen, setAlertModalOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isPlanLimit, setIsPlanLimit] = useState(false);
   const [tags, setTags] = useState<{ id: string; name: string }[]>([]);
@@ -145,6 +147,15 @@ export function SearchClient() {
         >
           Save this search
         </button>
+        {selectedTagIds.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setAlertModalOpen(true)}
+            className="rounded-md border border-neutral-300 px-3 py-2 text-sm hover:bg-neutral-100 dark:border-neutral-600 dark:hover:bg-neutral-800"
+          >
+            Create alert for these tags
+          </button>
+        )}
         {query && (
           <button
             type="button"
@@ -165,6 +176,21 @@ export function SearchClient() {
           semantic_enabled: semantic,
           filters: selectedTagIds.length ? { tag_ids: selectedTagIds } : {},
         }}
+      />
+      <AlertModal
+        open={alertModalOpen}
+        onClose={() => setAlertModalOpen(false)}
+        onSave={() => setAlertModalOpen(false)}
+        savedSearches={[]}
+        presetSource={
+          selectedTagIds.length
+            ? {
+                type: 'tag_filter',
+                tagIds: selectedTagIds,
+                tagNames: tags.filter((t) => selectedTagIds.includes(t.id)).map((t) => t.name),
+              }
+            : undefined
+        }
       />
 
       {error && (

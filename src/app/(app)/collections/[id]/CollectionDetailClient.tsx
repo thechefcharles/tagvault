@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { TagChips } from '@/components/TagChips';
+import { AlertModal } from '@/components/alerts/AlertModal';
 
 type Item = {
   id: string;
@@ -24,6 +25,7 @@ function formatDate(s: string) {
 
 export function CollectionDetailClient({
   collectionId,
+  collectionName,
   items: initialItems,
 }: {
   collectionId: string;
@@ -33,6 +35,7 @@ export function CollectionDetailClient({
   const router = useRouter();
   const [items, setItems] = useState(initialItems);
   const [removingId, setRemovingId] = useState<string | null>(null);
+  const [alertModalOpen, setAlertModalOpen] = useState(false);
 
   async function removeItem(itemId: string) {
     setRemovingId(itemId);
@@ -53,9 +56,18 @@ export function CollectionDetailClient({
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-neutral-600 dark:text-neutral-400">
-        {items.length} item{items.length !== 1 ? 's' : ''} in this collection
-      </p>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-sm text-neutral-600 dark:text-neutral-400">
+          {items.length} item{items.length !== 1 ? 's' : ''} in this collection
+        </p>
+        <button
+          type="button"
+          onClick={() => setAlertModalOpen(true)}
+          className="rounded-md bg-neutral-900 px-3 py-1.5 text-sm text-white hover:bg-neutral-800 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-neutral-200"
+        >
+          Create alert
+        </button>
+      </div>
       {items.length === 0 ? (
         <p className="rounded-lg border border-dashed border-neutral-300 px-6 py-8 text-center text-neutral-500 dark:border-neutral-600">
           No items yet. Add items from the Vault.
@@ -92,6 +104,16 @@ export function CollectionDetailClient({
           ))}
         </ul>
       )}
+      <AlertModal
+        open={alertModalOpen}
+        onClose={() => setAlertModalOpen(false)}
+        onSave={() => {
+          setAlertModalOpen(false);
+          router.refresh();
+        }}
+        savedSearches={[]}
+        presetSource={{ type: 'collection', collectionId, collectionName: collectionName ?? 'Collection' }}
+      />
     </div>
   );
 }

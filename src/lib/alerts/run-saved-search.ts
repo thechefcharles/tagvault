@@ -22,8 +22,9 @@ export async function runSavedSearch(
   userId: string,
   supabase?: SupabaseClient,
 ): Promise<Item[]> {
-  const filters = (saved.filters ?? {}) as { type?: string[] };
+  const filters = (saved.filters ?? {}) as { type?: string[]; tag_ids?: string[] };
   const type = filters.type?.[0] ?? 'all';
+  const tagIds = Array.isArray(filters.tag_ids) ? filters.tag_ids : undefined;
 
   let queryEmbedding: number[] | null = null;
   if (saved.semantic_enabled && saved.query?.trim()) {
@@ -36,10 +37,11 @@ export async function runSavedSearch(
     q: saved.query ?? '',
     type: type as 'link' | 'file' | 'note' | 'all',
     sort: (saved.sort ?? 'best_match') as 'best_match' | 'priority' | 'recent',
-    limit: 50,
+    limit: 100,
     offset: 0,
     useSemantic: saved.semantic_enabled,
     queryEmbedding,
+    tagIds,
     supabase,
   });
 }
