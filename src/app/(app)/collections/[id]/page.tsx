@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { requireActiveOrg } from '@/lib/server/auth';
 import { createClient } from '@/lib/supabase/server';
 import { CollectionDetailClient } from './CollectionDetailClient';
+import { ShareSection } from '@/components/collections/ShareSection';
 
 export const dynamic = 'force-dynamic';
 
@@ -73,7 +74,8 @@ export default async function CollectionDetailPage({
         </Link>
         <h1 className="text-xl font-semibold">{collection.name}</h1>
       </header>
-      <main className="mx-auto max-w-2xl">
+      <main className="mx-auto max-w-2xl space-y-6">
+        <ShareSection collectionId={id} />
         <CollectionDetailClient
           collectionId={id}
           collectionName={collection.name}
