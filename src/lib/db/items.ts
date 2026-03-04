@@ -5,12 +5,14 @@ import type { CreateItemInput, UpdateItemInput } from '@/lib/db/validators';
 const CURSOR_SEP = '__C__';
 
 export async function listItems({
+  orgId,
   userId,
   type,
   sort = 'recent',
   limit = 25,
   cursor,
 }: {
+  orgId: string;
   userId: string;
   type?: 'link' | 'file' | 'note';
   sort?: 'recent' | 'priority';
@@ -19,11 +21,12 @@ export async function listItems({
 }): Promise<{ items: Item[]; nextCursor: string | null }> {
   const supabase = await createClient();
   const safeLimit = Math.min(Math.max(1, limit), 100);
+  void userId; // reserved for future use (e.g. filter by creator)
 
   let query = supabase
     .from('items')
     .select('*')
-    .eq('user_id', userId)
+    .eq('org_id', orgId)
     .order('created_at', { ascending: false })
     .order('id', { ascending: false })
     .limit(safeLimit + 1);
@@ -59,10 +62,10 @@ export async function listItems({
 }
 
 export async function getItemById({
-  userId,
+  orgId,
   id,
 }: {
-  userId: string;
+  orgId: string;
   id: string;
 }): Promise<Item | null> {
   const supabase = await createClient();
@@ -70,7 +73,7 @@ export async function getItemById({
     .from('items')
     .select('*')
     .eq('id', id)
-    .eq('user_id', userId)
+    .eq('org_id', orgId)
     .single();
 
   if (error) {
@@ -81,9 +84,11 @@ export async function getItemById({
 }
 
 export async function createItem({
+  orgId,
   userId,
   payload,
 }: {
+  orgId: string;
   userId: string;
   payload: CreateItemInput;
 }): Promise<Item> {
@@ -91,6 +96,7 @@ export async function createItem({
   const { data, error } = await supabase
     .from('items')
     .insert({
+      org_id: orgId,
       user_id: userId,
       type: payload.type,
       title: payload.title ?? null,
@@ -106,11 +112,11 @@ export async function createItem({
 }
 
 export async function updateItem({
-  userId,
+  orgId,
   id,
   payload,
 }: {
-  userId: string;
+  orgId: string;
   id: string;
   payload: UpdateItemInput;
 }): Promise<Item> {
@@ -125,7 +131,7 @@ export async function updateItem({
     .from('items')
     .update(update)
     .eq('id', id)
-    .eq('user_id', userId)
+    .eq('org_id', orgId)
     .select()
     .single();
 
@@ -134,21 +140,21 @@ export async function updateItem({
   return data as Item;
 }
 
-export async function deleteItem({ userId, id }: { userId: string; id: string }): Promise<void> {
+export async function deleteItem({ orgId, id }: { orgId: string; id: string }): Promise<void> {
   const supabase = await createClient();
-  const { error } = await supabase.from('items').delete().eq('id', id).eq('user_id', userId);
+  const { error } = await supabase.from('items').delete().eq('id', id).eq('org_id', orgId);
 
   if (error) throw error;
 }
 
 export async function attachFileToItem({
-  userId,
+  orgId,
   id,
   storage_path,
   mime_type,
   title,
 }: {
-  userId: string;
+  orgId: string;
   id: string;
   storage_path: string;
   mime_type: string;
@@ -165,7 +171,7 @@ export async function attachFileToItem({
     .from('items')
     .update(update)
     .eq('id', id)
-    .eq('user_id', userId)
+    .eq('org_id', orgId)
     .select()
     .single();
 

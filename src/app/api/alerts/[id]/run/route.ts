@@ -1,26 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireUser } from '@/lib/server/auth';
+import { requireActiveOrg } from '@/lib/server/auth';
 import { createClient } from '@/lib/supabase/server';
 import { runSavedSearch } from '@/lib/alerts/run-saved-search';
 
 export async function POST(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const user = await requireUser();
+    const { user, activeOrgId } = await requireActiveOrg();
     const { id } = await params;
     const supabase = await createClient();
 
     const { data: alert, error: errAlert } = await supabase
       .from('alerts')
-      .select('id, owner_user_id, saved_search_id, name, notify_on_new')
+      .select('id, org_id, owner_user_id, saved_search_id, name, notify_on_new')
       .eq('id', id)
-      .eq('owner_user_id', user.id)
+      .eq('org_id', activeOrgId)
       .single();
 
     if (errAlert || !alert) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
 
-    const ownerId = alert.owner_user_id as string;
+    const orgId = alert.org_id as string;
     const { data: saved, error: errSaved } = await supabase
       .from('saved_searches')
       .select('id, query, filters, sort, semantic_enabled')
@@ -39,7 +39,8 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
         sort: string;
         semantic_enabled: boolean;
       },
-      ownerId,
+      orgId,
+      user.id,
     );
 
     const itemIds = items.map((i) => i.id);
@@ -65,8 +66,8 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
         );
 
         await supabase.from('notifications').insert({
-          owner_user_id: ownerId,
-          org_id: null,
+          owner_user_id: user.id,
+          org_id: orgId,
           type: 'alert_new_matches',
           title: `New matches for: ${alert.name}`,
           body: `${newMatchCount} new item${newMatchCount === 1 ? '' : 's'} matched your saved search.`,
@@ -107,7 +108,7 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
       notified: newMatchCount > 0,
     });
   } catch (err) {
-    if (err instanceof Error && err.message === 'Unauthenticated') {
+    if (err instanceof Error && (err.message === 'Unauthenticated' || err.message === 'No active org')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     return NextResponse.json(

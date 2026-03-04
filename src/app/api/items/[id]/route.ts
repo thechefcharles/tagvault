@@ -1,6 +1,6 @@
 import * as Sentry from '@sentry/nextjs';
 import { NextRequest, NextResponse } from 'next/server';
-import { requireUser } from '@/lib/server/auth';
+import { requireActiveOrg } from '@/lib/server/auth';
 import { checkRateLimit, getRateLimitKey } from '@/lib/api/rate-limit';
 import { apiError } from '@/lib/api/response';
 import { createClient } from '@/lib/supabase/server';
@@ -12,12 +12,12 @@ import { assertWithinLimits, incrementUsage, EntitlementError } from '@/lib/enti
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const user = await requireUser();
+    const { activeOrgId } = await requireActiveOrg();
     const { id } = await params;
     const { searchParams } = new URL(request.url);
     const download = searchParams.get('download') === '1';
 
-    const item = await getItemById({ userId: user.id, id });
+    const item = await getItemById({ orgId: activeOrgId, id });
     if (!item) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
@@ -35,7 +35,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     return NextResponse.json(item);
   } catch (err) {
-    if (err instanceof Error && err.message === 'Unauthenticated') {
+    if (err instanceof Error && (err.message === 'Unauthenticated' || err.message === 'No active org')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     Sentry.captureException(err);
@@ -48,7 +48,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const user = await requireUser();
+    const { user, activeOrgId } = await requireActiveOrg();
     const key = getRateLimitKey('items', request, user.id);
     const rl = await checkRateLimit(key, { limit: 30, windowSec: 60 });
     if (!rl.ok) {
@@ -75,7 +75,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const hasEmbeddingTrigger = parsed.data.title !== undefined || parsed.data.description !== undefined;
     if (hasEmbeddingTrigger) {
       try {
-        await assertWithinLimits({ userId: user.id, action: 'embeddings_enqueue' });
+        await assertWithinLimits({ userId: user.id, orgId: activeOrgId, action: 'embeddings_enqueue' });
       } catch (e) {
         if (e instanceof EntitlementError) {
           return apiError('PLAN_LIMIT_EXCEEDED', e.message, undefined, 402);
@@ -85,7 +85,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     }
 
     const item = await updateItem({
-      userId: user.id,
+      orgId: activeOrgId,
       id,
       payload: parsed.data,
     });
@@ -96,7 +96,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
     return NextResponse.json(item);
   } catch (err) {
-    if (err instanceof Error && err.message === 'Unauthenticated') {
+    if (err instanceof Error && (err.message === 'Unauthenticated' || err.message === 'No active org')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     if (err instanceof EntitlementError) {
@@ -115,7 +115,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const user = await requireUser();
+    const { user, activeOrgId } = await requireActiveOrg();
     const key = getRateLimitKey('items', request, user.id);
     const rl = await checkRateLimit(key, { limit: 30, windowSec: 60 });
     if (!rl.ok) {
@@ -130,7 +130,7 @@ export async function DELETE(
     }
     const { id } = await params;
 
-    const item = await getItemById({ userId: user.id, id });
+    const item = await getItemById({ orgId: activeOrgId, id });
     if (!item) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
@@ -156,10 +156,10 @@ export async function DELETE(
       }
     }
 
-    await deleteItem({ userId: user.id, id });
+    await deleteItem({ orgId: activeOrgId, id });
     return NextResponse.json({ ok: true });
   } catch (err) {
-    if (err instanceof Error && err.message === 'Unauthenticated') {
+    if (err instanceof Error && (err.message === 'Unauthenticated' || err.message === 'No active org')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     Sentry.captureException(err);

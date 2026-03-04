@@ -5,6 +5,7 @@ import type { Item } from '@/types/item';
 export type HybridSearchResult = Item & { score?: number | null };
 
 export async function searchItemsHybrid({
+  orgId,
   userId,
   q,
   type,
@@ -15,6 +16,7 @@ export async function searchItemsHybrid({
   queryEmbedding,
   supabase: supabaseOverride,
 }: {
+  orgId: string;
   userId: string;
   q: string;
   type?: 'link' | 'file' | 'note' | 'all';
@@ -31,6 +33,7 @@ export async function searchItemsHybrid({
   const { data, error } = await supabase.rpc('rpc_search_items_hybrid', {
     p_query: q ?? '',
     p_owner: userId,
+    p_org_id: orgId,
     p_query_embedding: queryEmbedding,
     p_limit: limit,
     p_offset: offset,

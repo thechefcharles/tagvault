@@ -24,20 +24,20 @@ function logWebhook(eventId: string, type: string, msg: string, extra?: Record<s
   );
 }
 
-async function resolveUserId(
+async function resolveOrgId(
   admin: ReturnType<typeof createAdminClient>,
   customerId: string,
-  metadata?: { user_id?: string } | null,
+  metadata?: { org_id?: string; user_id?: string } | null,
 ): Promise<string | null> {
-  if (metadata?.user_id) return metadata.user_id;
+  if (metadata?.org_id) return metadata.org_id;
 
   const { data } = await admin
     .from('billing_accounts')
-    .select('user_id')
+    .select('org_id')
     .eq('stripe_customer_id', customerId)
     .single();
 
-  return data?.user_id ?? null;
+  return data?.org_id ?? null;
 }
 
 async function ensureProcessed(
@@ -99,19 +99,28 @@ type BillingUpdates = {
   grace_period_ends_at?: string | null;
 };
 
-async function upsertBilling(
+async function upsertBillingByOrg(
   admin: ReturnType<typeof createAdminClient>,
-  userId: string,
+  orgId: string,
   updates: BillingUpdates,
 ) {
+  const { data: org } = await admin
+    .from('organizations')
+    .select('owner_id')
+    .eq('id', orgId)
+    .single();
+  const ownerId = org?.owner_id;
+  if (!ownerId) throw new Error(`Org ${orgId} not found`);
+
   const { error } = await admin
     .from('billing_accounts')
     .upsert(
       {
-        user_id: userId,
+        org_id: orgId,
+        user_id: ownerId,
         ...updates,
       },
-      { onConflict: 'user_id' },
+      { onConflict: 'org_id' },
     );
 
   if (error) throw error;
@@ -200,8 +209,8 @@ async function processWebhookEvent(
           typeof session.customer === 'string' ? session.customer : session.customer?.id;
         if (!customerId) break;
 
-        const userId = await resolveUserId(admin, customerId, session.metadata);
-        if (!userId) break;
+        const orgId = await resolveOrgId(admin, customerId, session.metadata);
+        if (!orgId) break;
 
         const subId =
           typeof session.subscription === 'string'
@@ -212,7 +221,7 @@ async function processWebhookEvent(
           const sub = await stripe.subscriptions.retrieve(subId);
           const periodEnd = getPeriodEnd(sub);
           const priceId = getPriceId(sub);
-          await upsertBilling(admin, userId, {
+          await upsertBillingByOrg(admin, orgId, {
             plan: 'pro',
             stripe_subscription_id: subId,
             status: sub.status,
@@ -222,7 +231,7 @@ async function processWebhookEvent(
             last_payment_status: 'paid',
             grace_period_ends_at: null,
           });
-          logWebhook(event.id, event.type, 'checkout completed', { userId });
+          logWebhook(event.id, event.type, 'checkout completed', { orgId });
         }
         break;
       }
@@ -233,8 +242,8 @@ async function processWebhookEvent(
         const customerId = typeof sub.customer === 'string' ? sub.customer : sub.customer?.id;
         if (!customerId) break;
 
-        const userId = await resolveUserId(admin, customerId, sub.metadata);
-        if (!userId) break;
+        const orgId = await resolveOrgId(admin, customerId, sub.metadata);
+        if (!orgId) break;
 
         const periodEnd = getPeriodEnd(sub);
         const priceId = getPriceId(sub);
@@ -250,7 +259,7 @@ async function processWebhookEvent(
           if (periodEndDate > new Date()) plan = 'pro';
         }
 
-        await upsertBilling(admin, userId, {
+        await upsertBillingByOrg(admin, orgId, {
           plan,
           stripe_subscription_id: sub.id,
           status: sub.status,
@@ -258,7 +267,7 @@ async function processWebhookEvent(
           cancel_at_period_end: cancelAtPeriodEnd,
           price_id: priceId,
         });
-        logWebhook(event.id, event.type, 'subscription updated', { userId, plan, status: sub.status });
+        logWebhook(event.id, event.type, 'subscription updated', { orgId, plan, status: sub.status });
         break;
       }
 
@@ -267,10 +276,10 @@ async function processWebhookEvent(
         const customerId = typeof sub.customer === 'string' ? sub.customer : sub.customer?.id;
         if (!customerId) break;
 
-        const userId = await resolveUserId(admin, customerId, sub.metadata);
-        if (!userId) break;
+        const orgId = await resolveOrgId(admin, customerId, sub.metadata);
+        if (!orgId) break;
 
-        await upsertBilling(admin, userId, {
+        await upsertBillingByOrg(admin, orgId, {
           plan: 'free',
           stripe_subscription_id: null,
           status: 'canceled',
@@ -280,7 +289,7 @@ async function processWebhookEvent(
           last_payment_status: null,
           grace_period_ends_at: null,
         });
-        logWebhook(event.id, event.type, 'subscription deleted', { userId });
+        logWebhook(event.id, event.type, 'subscription deleted', { orgId });
         break;
       }
 
@@ -298,15 +307,15 @@ async function processWebhookEvent(
             : invoice.subscription?.id;
         if (!subId) break;
 
-        const userId = await resolveUserId(admin, customerId);
-        if (!userId) break;
+        const orgId = await resolveOrgId(admin, customerId);
+        if (!orgId) break;
 
         const stripe = getStripe();
         const sub = await stripe.subscriptions.retrieve(subId);
         const periodEnd = getPeriodEnd(sub);
         const priceId = getPriceId(sub);
 
-        await upsertBilling(admin, userId, {
+        await upsertBillingByOrg(admin, orgId, {
           plan: 'pro',
           stripe_subscription_id: subId,
           status: 'active',
@@ -316,7 +325,7 @@ async function processWebhookEvent(
           last_payment_status: 'paid',
           grace_period_ends_at: null,
         });
-        logWebhook(event.id, event.type, 'invoice paid', { userId });
+        logWebhook(event.id, event.type, 'invoice paid', { orgId });
         break;
       }
 
@@ -326,18 +335,18 @@ async function processWebhookEvent(
           typeof invoice.customer === 'string' ? invoice.customer : invoice.customer?.id;
         if (!customerId) break;
 
-        const userId = await resolveUserId(admin, customerId);
-        if (!userId) break;
+        const orgId = await resolveOrgId(admin, customerId);
+        if (!orgId) break;
 
         const graceEnd = gracePeriodEndsAt();
-        await upsertBilling(admin, userId, {
+        await upsertBillingByOrg(admin, orgId, {
           plan: 'pro',
           status: 'past_due',
           last_payment_status: 'failed',
           grace_period_ends_at: graceEnd,
         });
         logWebhook(event.id, event.type, 'payment failed, grace set', {
-          userId,
+          orgId,
           grace_period_ends_at: graceEnd,
         });
         break;

@@ -1,8 +1,8 @@
 import { NextRequest } from 'next/server';
-import { requireUser } from '@/lib/server/auth';
+import { requireActiveOrg } from '@/lib/server/auth';
 import { apiOk, apiError } from '@/lib/api/response';
 import { getStripe } from '@/lib/stripe';
-import { getBillingAccount } from '@/lib/billing';
+import { getBillingAccountForOrg } from '@/lib/billing';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { rateLimitOrThrow, RateLimitError, getRateLimitKey } from '@/lib/rateLimit';
 import { logApi } from '@/lib/apiLog';
@@ -23,8 +23,11 @@ export async function POST(request: NextRequest) {
   const requestId = crypto.randomUUID();
   const start = Date.now();
   let user: { id: string; email?: string };
+  let activeOrgId: string;
   try {
-    user = await requireUser();
+    const ctx = await requireActiveOrg();
+    user = ctx.user;
+    activeOrgId = ctx.activeOrgId;
     const key = getRateLimitKey('billing:portal', request, user.id);
     await rateLimitOrThrow({ key, limit: 10, windowSec: 60 });
   } catch (e) {
@@ -50,18 +53,18 @@ export async function POST(request: NextRequest) {
 
   const stripe = getStripe();
   const admin = createAdminClient();
-  let billing = await getBillingAccount(user.id);
+  let billing = await getBillingAccountForOrg(activeOrgId);
 
   if (!billing.stripe_customer_id) {
     const customer = await stripe.customers.create({
       email: user.email ?? undefined,
-      metadata: { user_id: user.id },
+      metadata: { user_id: user.id, org_id: activeOrgId },
     });
     await admin
       .from('billing_accounts')
       .update({ stripe_customer_id: customer.id })
-      .eq('user_id', user.id);
-    billing = await getBillingAccount(user.id);
+      .eq('org_id', activeOrgId);
+    billing = await getBillingAccountForOrg(activeOrgId);
   }
 
   const baseUrl = getBaseUrl(request);

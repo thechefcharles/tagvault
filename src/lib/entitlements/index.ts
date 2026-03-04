@@ -1,5 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin';
-import { getBillingAccount, isPro } from '@/lib/billing';
+import { getBillingAccountForOrg, isPro } from '@/lib/billing';
 import { getLimit, type Plan } from './limits';
 
 export type Action =
@@ -11,19 +11,11 @@ export type Action =
 
 export type Entitlements = { plan: Plan };
 
-/** Effective plan: billing_accounts (Stripe) is source of truth; user_entitlements for manual overrides. */
-export async function getUserEntitlements(userId: string): Promise<Entitlements> {
-  const billing = await getBillingAccount(userId);
+/** Effective plan for an org: billing_accounts (Stripe) is source of truth. */
+export async function getOrgEntitlements(orgId: string): Promise<Entitlements> {
+  const billing = await getBillingAccountForOrg(orgId);
   if (isPro(billing)) return { plan: 'pro' };
-
-  const admin = createAdminClient();
-  const { data } = await admin
-    .from('user_entitlements')
-    .select('plan')
-    .eq('user_id', userId)
-    .single();
-  const plan = (data?.plan as Plan) ?? 'free';
-  return { plan };
+  return { plan: 'free' };
 }
 
 /** Get usage row for today; creates if missing. Uses admin for upsert (RLS may block insert). */
@@ -75,19 +67,21 @@ export async function getOrInitUsage(
 /** Throws if the action would exceed plan limits. */
 export async function assertWithinLimits({
   userId,
+  orgId,
   action,
 }: {
   userId: string;
+  orgId: string;
   action: Action;
 }): Promise<void> {
-  const { plan } = await getUserEntitlements(userId);
+  const { plan } = await getOrgEntitlements(orgId);
   const today = new Date();
 
   switch (action) {
     case 'items_create': {
       const limit = getLimit(plan, 'items');
       const admin = createAdminClient();
-      const { count } = await admin.from('items').select('*', { count: 'exact', head: true }).eq('user_id', userId);
+      const { count } = await admin.from('items').select('*', { count: 'exact', head: true }).eq('org_id', orgId);
       if ((count ?? 0) >= limit) {
         throw new EntitlementError(`Upgrade required: free plan limit reached for items (${limit}).`);
       }
@@ -99,7 +93,7 @@ export async function assertWithinLimits({
       const { count } = await admin
         .from('saved_searches')
         .select('*', { count: 'exact', head: true })
-        .eq('owner_user_id', userId);
+        .eq('org_id', orgId);
       if ((count ?? 0) >= limit) {
         throw new EntitlementError(`Upgrade required: free plan limit reached for saved searches (${limit}).`);
       }
@@ -108,7 +102,7 @@ export async function assertWithinLimits({
     case 'alerts_create': {
       const limit = getLimit(plan, 'alerts');
       const admin = createAdminClient();
-      const { count } = await admin.from('alerts').select('*', { count: 'exact', head: true }).eq('owner_user_id', userId);
+      const { count } = await admin.from('alerts').select('*', { count: 'exact', head: true }).eq('org_id', orgId);
       if ((count ?? 0) >= limit) {
         throw new EntitlementError(`Upgrade required: free plan limit reached for alerts (${limit}).`);
       }

@@ -52,9 +52,9 @@ export async function POST(request: Request) {
 
       const { data: dueAlerts, error: errAlerts } = await supabase
         .from('alerts')
-        .select('id, owner_user_id, saved_search_id, name, frequency_minutes, notify_on_new')
+        .select('id, org_id, owner_user_id, saved_search_id, name, frequency_minutes, notify_on_new')
         .eq('enabled', true)
-        .not('owner_user_id', 'is', null)
+        .not('org_id', 'is', null)
         .lte('next_run_at', new Date().toISOString())
         .order('next_run_at', { ascending: true })
         .limit(DEFAULT_LIMIT);
@@ -74,8 +74,15 @@ export async function POST(request: Request) {
       let totalNotified = 0;
 
       for (const alert of dueAlerts) {
-        const ownerId = alert.owner_user_id as string;
-        if (!ownerId) continue;
+        const orgId = alert.org_id as string;
+        if (!orgId) continue;
+        const { data: orgRow } = await supabase
+          .from('organizations')
+          .select('owner_id')
+          .eq('id', orgId)
+          .single();
+        const runAsUserId = (alert.owner_user_id ?? orgRow?.owner_id) as string;
+        if (!runAsUserId) continue;
 
         let runStatus: 'success' | 'error' = 'success';
         let newMatchCount = 0;
@@ -100,7 +107,8 @@ export async function POST(request: Request) {
                 sort: string;
                 semantic_enabled: boolean;
               },
-              ownerId,
+              orgId,
+              runAsUserId,
               supabase,
             );
 
@@ -133,8 +141,8 @@ export async function POST(request: Request) {
                 };
 
                 await supabase.from('notifications').insert({
-                  owner_user_id: ownerId,
-                  org_id: null,
+                  owner_user_id: runAsUserId,
+                  org_id: orgId,
                   type: 'alert_new_matches',
                   title: `New matches for: ${alert.name}`,
                   body: `${newMatchCount} new item${newMatchCount === 1 ? '' : 's'} matched your saved search.`,

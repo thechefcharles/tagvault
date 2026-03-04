@@ -1,15 +1,14 @@
-import { notFound, redirect } from 'next/navigation';
+import { notFound } from 'next/navigation';
 import Link from 'next/link';
-import { getCurrentUser } from '@/lib/server/auth';
+import { requireActiveOrg } from '@/lib/server/auth';
 import { getItemById } from '@/lib/db/items';
 import { ItemDetailClient } from './ItemDetailClient';
 
 export default async function ItemDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const user = await getCurrentUser();
-  if (!user) redirect('/login');
+  const { activeOrgId } = await requireActiveOrg();
   const { id } = await params;
 
-  const item = await getItemById({ userId: user.id, id });
+  const item = await getItemById({ orgId: activeOrgId, id });
   if (!item) notFound();
 
   return (

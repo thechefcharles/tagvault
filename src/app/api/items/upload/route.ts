@@ -1,6 +1,6 @@
 import * as Sentry from '@sentry/nextjs';
 import { NextResponse } from 'next/server';
-import { requireUser } from '@/lib/server/auth';
+import { requireActiveOrg } from '@/lib/server/auth';
 import { checkRateLimit, getRateLimitKey } from '@/lib/api/rate-limit';
 import { apiError } from '@/lib/api/response';
 import { logApi } from '@/lib/apiLog';
@@ -15,7 +15,7 @@ export async function POST(request: Request) {
   const start = Date.now();
   let userId: string | undefined;
   try {
-    const user = await requireUser();
+    const { user, activeOrgId } = await requireActiveOrg();
     userId = user.id;
     const key = getRateLimitKey('items:upload', request, user.id);
     const rl = await checkRateLimit(key, { limit: 10, windowSec: 60 });
@@ -61,8 +61,8 @@ export async function POST(request: Request) {
     }
 
     try {
-      await assertWithinLimits({ userId: user.id, action: 'items_create' });
-      await assertWithinLimits({ userId: user.id, action: 'embeddings_enqueue' });
+      await assertWithinLimits({ userId: user.id, orgId: activeOrgId, action: 'items_create' });
+      await assertWithinLimits({ userId: user.id, orgId: activeOrgId, action: 'embeddings_enqueue' });
     } catch (e) {
       if (e instanceof EntitlementError) {
         return apiError('PLAN_LIMIT_EXCEEDED', e.message, undefined, 402);
@@ -73,6 +73,7 @@ export async function POST(request: Request) {
     const supabase = await createClient();
     const db = await import('@/lib/db/items');
     const item = await db.createItem({
+      orgId: activeOrgId,
       userId: user.id,
       payload: {
         type: 'file',
@@ -94,12 +95,12 @@ export async function POST(request: Request) {
       });
 
     if (uploadError) {
-      await db.deleteItem({ userId: user.id, id: item.id });
+      await db.deleteItem({ orgId: activeOrgId, id: item.id });
       return NextResponse.json({ error: uploadError.message || 'Upload failed' }, { status: 500 });
     }
 
     const updated = await db.attachFileToItem({
-      userId: user.id,
+      orgId: activeOrgId,
       id: item.id,
       storage_path: storagePath,
       mime_type: file.type || 'application/octet-stream',
@@ -120,7 +121,7 @@ export async function POST(request: Request) {
     return NextResponse.json(updated);
   } catch (err) {
     const ms = Date.now() - start;
-    if (err instanceof Error && err.message === 'Unauthenticated') {
+    if (err instanceof Error && (err.message === 'Unauthenticated' || err.message === 'No active org')) {
       logApi({ requestId, path: '/api/items/upload', method: 'POST', status: 401, ms });
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }

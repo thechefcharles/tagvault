@@ -1,6 +1,6 @@
 import * as Sentry from '@sentry/nextjs';
 import { NextResponse } from 'next/server';
-import { requireUser } from '@/lib/server/auth';
+import { requireActiveOrg } from '@/lib/server/auth';
 import { apiError } from '@/lib/api/response';
 import { assertWithinLimits, incrementUsage, EntitlementError } from '@/lib/entitlements';
 import { getQueryEmbedding } from '@/lib/embeddings';
@@ -13,7 +13,7 @@ export async function GET(request: Request) {
   const start = Date.now();
   let userId: string | undefined;
   try {
-    const user = await requireUser();
+    const { user, activeOrgId } = await requireActiveOrg();
     userId = user.id;
     const key = getRateLimitKey('search', request, user.id);
     const rlResult = await rateLimitOrThrow({ key, limit: 60, windowSec: 60 });
@@ -29,7 +29,7 @@ export async function GET(request: Request) {
 
     if (q.trim()) {
       try {
-        await assertWithinLimits({ userId: user.id, action: 'searches_run' });
+        await assertWithinLimits({ userId: user.id, orgId: activeOrgId, action: 'searches_run' });
       } catch (e) {
         if (e instanceof EntitlementError) {
           return apiError('PLAN_LIMIT_EXCEEDED', e.message, undefined, 402);
@@ -44,6 +44,7 @@ export async function GET(request: Request) {
 
     const fetchLimit = limit + 1;
     const items = await searchItemsHybrid({
+      orgId: activeOrgId,
       userId: user.id,
       q,
       type,

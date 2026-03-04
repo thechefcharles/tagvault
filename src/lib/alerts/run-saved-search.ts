@@ -12,12 +12,13 @@ export type SavedSearchRow = {
 };
 
 /**
- * Run a saved search for a given user.
+ * Run a saved search for a given org.
  * Reuses the same logic as /api/saved-searches/[id]/run.
  * Pass supabase when running from cron (admin client).
  */
 export async function runSavedSearch(
   saved: SavedSearchRow,
+  orgId: string,
   userId: string,
   supabase?: SupabaseClient,
 ): Promise<Item[]> {
@@ -30,6 +31,7 @@ export async function runSavedSearch(
   }
 
   return searchItemsHybrid({
+    orgId,
     userId,
     q: saved.query ?? '',
     type: type as 'link' | 'file' | 'note' | 'all',

@@ -1,9 +1,10 @@
 import Link from 'next/link';
-import { redirect } from 'next/navigation';
-import { getCurrentUser } from '@/lib/server/auth';
+import { requireActiveOrg } from '@/lib/server/auth';
+import { createClient } from '@/lib/supabase/server';
 import { LogoutButton } from '@/components/LogoutButton';
 import { ManageBillingButton } from '@/app/billing/success/ManageBillingButton';
 import { NotificationBell } from '@/components/NotificationBell';
+import { OrgSwitcher } from '@/components/OrgSwitcher';
 import { listItems } from '@/lib/db/items';
 import { VaultClient } from './VaultClient';
 
@@ -14,8 +15,21 @@ export default async function AppPage({
 }: {
   searchParams: Promise<{ type?: string; sort?: string; cursor?: string; limit?: string }>;
 }) {
-  const user = await getCurrentUser();
-  if (!user) redirect('/login');
+  const { user, activeOrgId } = await requireActiveOrg();
+  const supabase = await createClient();
+  const { data: memberships } = await supabase
+    .from('org_members')
+    .select('org_id')
+    .eq('user_id', user.id);
+  const orgIds = Array.from(new Set((memberships ?? []).map((m) => m.org_id)));
+  const { data: orgs } = orgIds.length
+    ? await supabase
+        .from('organizations')
+        .select('id, name, slug')
+        .in('id', orgIds)
+        .order('name')
+    : { data: [] };
+
   const params = await searchParams;
   const type = params.type as 'link' | 'file' | 'note' | undefined;
   const sort = (params.sort as 'recent' | 'priority') || 'recent';
@@ -23,6 +37,7 @@ export default async function AppPage({
   const limit = params.limit ? Math.min(100, Math.max(1, parseInt(params.limit, 10))) : 25;
 
   const { items, nextCursor } = await listItems({
+    orgId: activeOrgId,
     userId: user.id,
     type,
     sort,
@@ -35,6 +50,7 @@ export default async function AppPage({
       <header className="mx-auto flex max-w-2xl items-center justify-between">
         <h1 className="text-xl font-semibold">Vault</h1>
         <div className="flex items-center gap-2">
+          <OrgSwitcher orgs={orgs ?? []} activeOrgId={activeOrgId} />
           <NotificationBell />
           <ManageBillingButton />
           <LogoutButton />
@@ -49,6 +65,9 @@ export default async function AppPage({
         </Link>
         <Link href="/alerts" className="hover:text-foreground">
           Alerts
+        </Link>
+        <Link href="/orgs" className="hover:text-foreground">
+          Orgs
         </Link>
       </nav>
       <main className="mx-auto mt-6 max-w-2xl">

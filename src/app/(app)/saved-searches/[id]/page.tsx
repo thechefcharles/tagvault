@@ -1,13 +1,12 @@
-import { notFound, redirect } from 'next/navigation';
+import { notFound } from 'next/navigation';
 import Link from 'next/link';
-import { getCurrentUser } from '@/lib/server/auth';
+import { requireActiveOrg } from '@/lib/server/auth';
 import { createClient } from '@/lib/supabase/server';
 import { LogoutButton } from '@/components/LogoutButton';
 import { SavedSearchViewClient } from './SavedSearchViewClient';
 
 export default async function SavedSearchViewPage({ params }: { params: Promise<{ id: string }> }) {
-  const user = await getCurrentUser();
-  if (!user) redirect('/login');
+  const { activeOrgId } = await requireActiveOrg();
   const { id } = await params;
   const supabase = await createClient();
 
@@ -15,7 +14,7 @@ export default async function SavedSearchViewPage({ params }: { params: Promise<
     .from('saved_searches')
     .select('*')
     .eq('id', id)
-    .eq('owner_user_id', user.id)
+    .eq('org_id', activeOrgId)
     .single();
 
   if (error || !saved) notFound();

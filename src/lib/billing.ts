@@ -4,6 +4,7 @@ export type BillingPlan = 'free' | 'pro';
 
 export type BillingAccount = {
   user_id: string;
+  org_id: string;
   stripe_customer_id: string | null;
   stripe_subscription_id: string | null;
   plan: BillingPlan;
@@ -34,22 +35,31 @@ export function isPro(billing: BillingAccount): boolean {
   return false;
 }
 
-/** Get billing_accounts row for user. Creates one with plan=free if missing. */
-export async function getBillingAccount(userId: string): Promise<BillingAccount> {
+/** Get billing_accounts row for org. Creates one with plan=free if missing (user_id = org owner). */
+export async function getBillingAccountForOrg(orgId: string): Promise<BillingAccount> {
   const admin = createAdminClient();
   const { data, error } = await admin
     .from('billing_accounts')
     .select('*')
-    .eq('user_id', userId)
+    .eq('org_id', orgId)
     .single();
 
   if (error && error.code !== 'PGRST116') throw error;
 
   if (data) return normalizeBillingAccount(data);
 
+  const { data: org } = await admin
+    .from('organizations')
+    .select('owner_id')
+    .eq('id', orgId)
+    .single();
+
+  const ownerId = (org?.owner_id as string) ?? null;
+  if (!ownerId) throw new Error('Org not found');
+
   const { data: inserted, error: insertError } = await admin
     .from('billing_accounts')
-    .insert({ user_id: userId, plan: 'free' })
+    .insert({ org_id: orgId, user_id: ownerId, plan: 'free' })
     .select()
     .single();
 
@@ -58,7 +68,7 @@ export async function getBillingAccount(userId: string): Promise<BillingAccount>
       const { data: retry } = await admin
         .from('billing_accounts')
         .select('*')
-        .eq('user_id', userId)
+        .eq('org_id', orgId)
         .single();
       if (retry) return normalizeBillingAccount(retry);
     }
@@ -67,9 +77,29 @@ export async function getBillingAccount(userId: string): Promise<BillingAccount>
   return normalizeBillingAccount(inserted);
 }
 
+/** @deprecated Use getBillingAccountForOrg(activeOrgId). Kept for admin/backward compat. */
+export async function getBillingAccount(userId: string): Promise<BillingAccount> {
+  const admin = createAdminClient();
+  const { data: profile } = await admin
+    .from('profiles')
+    .select('active_org_id')
+    .eq('id', userId)
+    .single();
+  const orgId = profile?.active_org_id as string | null;
+  if (orgId) return getBillingAccountForOrg(orgId);
+  const { data } = await admin
+    .from('billing_accounts')
+    .select('*')
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (data) return normalizeBillingAccount(data);
+  throw new Error('No billing account; ensure personal org exists.');
+}
+
 function normalizeBillingAccount(row: Record<string, unknown>): BillingAccount {
   return {
     user_id: row.user_id as string,
+    org_id: (row.org_id as string) ?? '',
     stripe_customer_id: (row.stripe_customer_id as string | null) ?? null,
     stripe_subscription_id: (row.stripe_subscription_id as string | null) ?? null,
     plan: ((row.plan as string) === 'pro' ? 'pro' : 'free') as BillingPlan,
