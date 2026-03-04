@@ -3,9 +3,16 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { DownloadFileButton } from '@/components/DownloadFileButton';
+import { openExternal } from '@/lib/native/openExternal';
+import { ManageTags } from '@/components/ManageTags';
+import { AddToCollection } from '@/components/AddToCollection';
+import { ItemShareSection } from '@/components/share/ItemShareSection';
+import { TagChips } from '@/components/TagChips';
 import type { Item } from '@/types/item';
 
-export function ItemDetailClient({ item }: { item: Item }) {
+type ItemWithTags = Item & { tags?: { id: string; name: string; slug: string }[] };
+
+export function ItemDetailClient({ item }: { item: ItemWithTags }) {
   const router = useRouter();
   const [title, setTitle] = useState(item.title ?? '');
   const [description, setDescription] = useState(item.description);
@@ -66,17 +73,27 @@ export function ItemDetailClient({ item }: { item: Item }) {
   return (
     <div className="space-y-6">
       {item.type === 'link' && item.url && (
-        <a
-          href={item.url}
-          target="_blank"
-          rel="noopener noreferrer"
+        <button
+          type="button"
+          onClick={() => openExternal(item.url!)}
           className="inline-block rounded-md bg-neutral-900 px-4 py-2 text-white hover:bg-neutral-800 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-neutral-200"
         >
           Open link
-        </a>
+        </button>
       )}
 
       {item.type === 'file' && item.storage_path && <DownloadFileButton itemId={item.id} />}
+
+      <ItemShareSection itemId={item.id} />
+
+      {item.tags && item.tags.length > 0 && (
+        <div>
+          <p className="mb-1 text-sm font-medium">Tags</p>
+          <TagChips tags={item.tags} />
+        </div>
+      )}
+      <ManageTags itemId={item.id} initialTags={item.tags ?? []} />
+      <AddToCollection itemId={item.id} />
 
       <form onSubmit={handleSave} className="space-y-4">
         <div>

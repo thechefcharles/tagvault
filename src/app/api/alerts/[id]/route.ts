@@ -1,6 +1,6 @@
 import * as Sentry from '@sentry/nextjs';
 import { NextRequest, NextResponse } from 'next/server';
-import { requireUser } from '@/lib/server/auth';
+import { requireActiveOrg } from '@/lib/server/auth';
 import { createClient } from '@/lib/supabase/server';
 import { z } from 'zod';
 
@@ -13,7 +13,7 @@ const updateSchema = z.object({
 
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const user = await requireUser();
+    const { activeOrgId } = await requireActiveOrg();
     const { id } = await params;
     const supabase = await createClient();
 
@@ -21,7 +21,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       .from('alerts')
       .select('*, saved_searches(id, name, query)')
       .eq('id', id)
-      .eq('owner_user_id', user.id)
+      .eq('org_id', activeOrgId)
       .single();
 
     if (error || !data) {
@@ -29,7 +29,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     }
     return NextResponse.json(data);
   } catch (err) {
-    if (err instanceof Error && err.message === 'Unauthenticated') {
+    if (err instanceof Error && (err.message === 'Unauthenticated' || err.message === 'No active org')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     Sentry.captureException(err);
@@ -42,7 +42,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const user = await requireUser();
+    const { activeOrgId } = await requireActiveOrg();
     const { id } = await params;
     const body = await request.json();
     const parsed = updateSchema.safeParse(body);
@@ -59,7 +59,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       .from('alerts')
       .update(parsed.data)
       .eq('id', id)
-      .eq('owner_user_id', user.id)
+      .eq('org_id', activeOrgId)
       .select()
       .single();
 
@@ -69,7 +69,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     }
     return NextResponse.json(data);
   } catch (err) {
-    if (err instanceof Error && err.message === 'Unauthenticated') {
+    if (err instanceof Error && (err.message === 'Unauthenticated' || err.message === 'No active org')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     Sentry.captureException(err);
@@ -85,7 +85,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const user = await requireUser();
+    const { activeOrgId } = await requireActiveOrg();
     const { id } = await params;
     const supabase = await createClient();
 
@@ -93,12 +93,12 @@ export async function DELETE(
       .from('alerts')
       .delete()
       .eq('id', id)
-      .eq('owner_user_id', user.id);
+      .eq('org_id', activeOrgId);
 
     if (error) throw error;
     return NextResponse.json({ ok: true });
   } catch (err) {
-    if (err instanceof Error && err.message === 'Unauthenticated') {
+    if (err instanceof Error && (err.message === 'Unauthenticated' || err.message === 'No active org')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     Sentry.captureException(err);

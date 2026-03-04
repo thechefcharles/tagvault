@@ -1,6 +1,6 @@
 import * as Sentry from '@sentry/nextjs';
 import { NextResponse } from 'next/server';
-import { requireUser } from '@/lib/server/auth';
+import { requireActiveOrg } from '@/lib/server/auth';
 import { apiError } from '@/lib/api/response';
 import { assertWithinLimits, incrementUsage, EntitlementError } from '@/lib/entitlements';
 import { createClient } from '@/lib/supabase/server';
@@ -17,20 +17,20 @@ const createSchema = z.object({
 
 export async function GET() {
   try {
-    const user = await requireUser();
+    const { activeOrgId } = await requireActiveOrg();
     const supabase = await createClient();
 
     const { data, error } = await supabase
       .from('saved_searches')
       .select('*')
-      .eq('owner_user_id', user.id)
+      .eq('org_id', activeOrgId)
       .order('pinned', { ascending: false })
       .order('updated_at', { ascending: false });
 
     if (error) throw error;
     return NextResponse.json(data ?? []);
   } catch (err) {
-    if (err instanceof Error && err.message === 'Unauthenticated') {
+    if (err instanceof Error && (err.message === 'Unauthenticated' || err.message === 'No active org')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     Sentry.captureException(err);
@@ -43,7 +43,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const user = await requireUser();
+    const { user, activeOrgId } = await requireActiveOrg();
     const body = await request.json();
     const parsed = createSchema.safeParse(body);
 
@@ -55,7 +55,7 @@ export async function POST(request: Request) {
     }
 
     try {
-      await assertWithinLimits({ userId: user.id, action: 'saved_searches_create' });
+      await assertWithinLimits({ userId: user.id, orgId: activeOrgId, action: 'saved_searches_create' });
     } catch (e) {
       if (e instanceof EntitlementError) {
         return apiError('PLAN_LIMIT_EXCEEDED', e.message, undefined, 402);
@@ -67,8 +67,8 @@ export async function POST(request: Request) {
     const { data, error } = await supabase
       .from('saved_searches')
       .insert({
-        owner_user_id: user.id,
-        org_id: null,
+        owner_user_id: null,
+        org_id: activeOrgId,
         name: parsed.data.name,
         query: parsed.data.query,
         filters: parsed.data.filters,
@@ -84,7 +84,7 @@ export async function POST(request: Request) {
     await incrementUsage({ userId: user.id, action: 'saved_searches_create' });
     return NextResponse.json(data);
   } catch (err) {
-    if (err instanceof Error && err.message === 'Unauthenticated') {
+    if (err instanceof Error && (err.message === 'Unauthenticated' || err.message === 'No active org')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     if (err instanceof EntitlementError) {

@@ -5,6 +5,7 @@ import type { Item } from '@/types/item';
 export type HybridSearchResult = Item & { score?: number | null };
 
 export async function searchItemsHybrid({
+  orgId,
   userId,
   q,
   type,
@@ -13,8 +14,10 @@ export async function searchItemsHybrid({
   offset = 0,
   useSemantic = true,
   queryEmbedding,
+  tagIds,
   supabase: supabaseOverride,
 }: {
+  orgId: string;
   userId: string;
   q: string;
   type?: 'link' | 'file' | 'note' | 'all';
@@ -23,20 +26,24 @@ export async function searchItemsHybrid({
   offset?: number;
   useSemantic?: boolean;
   queryEmbedding: number[] | null;
+  tagIds?: string[];
   supabase?: SupabaseClient;
 }): Promise<HybridSearchResult[]> {
   const supabase = supabaseOverride ?? (await createClient());
   const typeParam = type && type !== 'all' ? type : null;
+  const tagIdsParam = tagIds?.length ? tagIds : null;
 
   const { data, error } = await supabase.rpc('rpc_search_items_hybrid', {
     p_query: q ?? '',
     p_owner: userId,
+    p_org_id: orgId,
     p_query_embedding: queryEmbedding,
     p_limit: limit,
     p_offset: offset,
     p_use_semantic: useSemantic && !!queryEmbedding?.length,
     p_type: typeParam,
     p_sort: sort,
+    p_tag_ids: tagIdsParam,
   });
 
   if (error) throw error;

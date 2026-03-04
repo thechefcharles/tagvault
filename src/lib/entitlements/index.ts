@@ -1,29 +1,29 @@
 import { createAdminClient } from '@/lib/supabase/admin';
-import { getBillingAccount, isPro } from '@/lib/billing';
+import { getBillingAccountForOrg, isPro } from '@/lib/billing';
 import { getLimit, type Plan } from './limits';
+
+export type Entitlements = { plan: Plan; seat_limit: number };
 
 export type Action =
   | 'items_create'
   | 'saved_searches_create'
   | 'alerts_create'
   | 'searches_run'
-  | 'embeddings_enqueue';
+  | 'embeddings_enqueue'
+  | 'tags_create'
+  | 'collections_create'
+  | 'collection_shares_create'
+  | 'item_shares_create';
 
-export type Entitlements = { plan: Plan };
-
-/** Effective plan: billing_accounts (Stripe) is source of truth; user_entitlements for manual overrides. */
-export async function getUserEntitlements(userId: string): Promise<Entitlements> {
-  const billing = await getBillingAccount(userId);
-  if (isPro(billing)) return { plan: 'pro' };
-
-  const admin = createAdminClient();
-  const { data } = await admin
-    .from('user_entitlements')
-    .select('plan')
-    .eq('user_id', userId)
-    .single();
-  const plan = (data?.plan as Plan) ?? 'free';
-  return { plan };
+/** Effective plan for an org: billing_accounts (Stripe) is source of truth. */
+export async function getOrgEntitlements(orgId: string): Promise<Entitlements> {
+  const billing = await getBillingAccountForOrg(orgId);
+  let plan: Plan = 'free';
+  if (isPro(billing)) {
+    plan = billing.plan === 'team' ? 'team' : 'pro';
+  }
+  const seat_limit = getLimit(plan, 'seats');
+  return { plan, seat_limit };
 }
 
 /** Get usage row for today; creates if missing. Uses admin for upsert (RLS may block insert). */
@@ -75,19 +75,21 @@ export async function getOrInitUsage(
 /** Throws if the action would exceed plan limits. */
 export async function assertWithinLimits({
   userId,
+  orgId,
   action,
 }: {
   userId: string;
+  orgId: string;
   action: Action;
 }): Promise<void> {
-  const { plan } = await getUserEntitlements(userId);
+  const { plan } = await getOrgEntitlements(orgId);
   const today = new Date();
 
   switch (action) {
     case 'items_create': {
       const limit = getLimit(plan, 'items');
       const admin = createAdminClient();
-      const { count } = await admin.from('items').select('*', { count: 'exact', head: true }).eq('user_id', userId);
+      const { count } = await admin.from('items').select('*', { count: 'exact', head: true }).eq('org_id', orgId);
       if ((count ?? 0) >= limit) {
         throw new EntitlementError(`Upgrade required: free plan limit reached for items (${limit}).`);
       }
@@ -99,7 +101,7 @@ export async function assertWithinLimits({
       const { count } = await admin
         .from('saved_searches')
         .select('*', { count: 'exact', head: true })
-        .eq('owner_user_id', userId);
+        .eq('org_id', orgId);
       if ((count ?? 0) >= limit) {
         throw new EntitlementError(`Upgrade required: free plan limit reached for saved searches (${limit}).`);
       }
@@ -108,7 +110,7 @@ export async function assertWithinLimits({
     case 'alerts_create': {
       const limit = getLimit(plan, 'alerts');
       const admin = createAdminClient();
-      const { count } = await admin.from('alerts').select('*', { count: 'exact', head: true }).eq('owner_user_id', userId);
+      const { count } = await admin.from('alerts').select('*', { count: 'exact', head: true }).eq('org_id', orgId);
       if ((count ?? 0) >= limit) {
         throw new EntitlementError(`Upgrade required: free plan limit reached for alerts (${limit}).`);
       }
@@ -130,6 +132,59 @@ export async function assertWithinLimits({
       }
       break;
     }
+    case 'tags_create': {
+      const limit = getLimit(plan, 'tags');
+      const admin = createAdminClient();
+      const { count } = await admin.from('tags').select('*', { count: 'exact', head: true }).eq('org_id', orgId);
+      if ((count ?? 0) >= limit) {
+        throw new EntitlementError(`Upgrade required: free plan limit reached for tags (${limit}).`);
+      }
+      break;
+    }
+    case 'collections_create': {
+      const limit = getLimit(plan, 'collections');
+      const admin = createAdminClient();
+      const { count } = await admin
+        .from('collections')
+        .select('*', { count: 'exact', head: true })
+        .eq('org_id', orgId);
+      if ((count ?? 0) >= limit) {
+        throw new EntitlementError(`Upgrade required: free plan limit reached for collections (${limit}).`);
+      }
+      break;
+    }
+    case 'collection_shares_create': {
+      const limit = getLimit(plan, 'collection_shares');
+      const admin = createAdminClient();
+      const { count } = await admin
+        .from('collection_shares')
+        .select('*', { count: 'exact', head: true })
+        .eq('org_id', orgId)
+        .is('revoked_at', null)
+        .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`);
+      if ((count ?? 0) >= limit) {
+        throw new EntitlementError(
+          `Upgrade required: free plan cannot create share links. Pro/Team plans allow ${limit} active shares.`,
+        );
+      }
+      break;
+    }
+    case 'item_shares_create': {
+      const limit = getLimit(plan, 'item_shares');
+      const admin = createAdminClient();
+      const { count } = await admin
+        .from('item_shares')
+        .select('*', { count: 'exact', head: true })
+        .eq('org_id', orgId)
+        .is('revoked_at', null)
+        .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`);
+      if ((count ?? 0) >= limit) {
+        throw new EntitlementError(
+          `Upgrade required: free plan cannot create item share links. Pro/Team plans allow ${limit} active shares.`,
+        );
+      }
+      break;
+    }
   }
 }
 
@@ -139,6 +194,10 @@ const ACTION_COL: Record<Action, string> = {
   alerts_create: 'alerts_created',
   searches_run: 'searches_run',
   embeddings_enqueue: 'embeddings_enqueued',
+  tags_create: 'items_created',
+  collections_create: 'items_created',
+  collection_shares_create: 'items_created',
+  item_shares_create: 'items_created',
 };
 
 /** Increment usage counters. Call after successful action. */

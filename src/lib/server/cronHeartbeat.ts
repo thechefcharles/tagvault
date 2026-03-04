@@ -6,6 +6,8 @@
 import { createAdminClient } from '@/lib/supabase/admin';
 
 const JOB_ALERTS_PROCESS_DUE = 'alerts:process-due';
+const JOB_NOTIFICATIONS_DIGEST = 'notifications:process-digest';
+const JOB_BACKUPS_NIGHTLY = 'backups:process-nightly';
 const MAX_ERROR_LEN = 500;
 
 export async function recordCronStarted(job: string): Promise<void> {
@@ -83,4 +85,4 @@ export async function recordCronSkipped(job: string, reason: string): Promise<vo
     );
 }
 
-export { JOB_ALERTS_PROCESS_DUE };
+export { JOB_ALERTS_PROCESS_DUE, JOB_NOTIFICATIONS_DIGEST, JOB_BACKUPS_NIGHTLY };

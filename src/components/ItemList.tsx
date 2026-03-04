@@ -3,7 +3,8 @@
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useState } from 'react';
-import type { Item } from '@/types/item';
+import { TagChips } from '@/components/TagChips';
+import type { ItemWithTags } from '@/types/item';
 
 function formatDate(s: string) {
   return new Date(s).toLocaleDateString(undefined, {
@@ -18,11 +19,13 @@ export function ItemList({
   nextCursor,
   onLoadMore,
   loadingMore,
+  tagIdsFilter,
 }: {
-  items: Item[];
+  items: ItemWithTags[];
   nextCursor: string | null;
   onLoadMore?: () => void;
   loadingMore?: boolean;
+  tagIdsFilter?: string[];
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -31,13 +34,17 @@ export function ItemList({
   const type = searchParams.get('type') ?? 'all';
   const sort = searchParams.get('sort') ?? 'recent';
 
-  function setParams(updates: { type?: string; sort?: string; cursor?: string }) {
+  function setParams(updates: { type?: string; sort?: string; cursor?: string; tag_ids?: string }) {
     const params = new URLSearchParams(searchParams);
     if (updates.type !== undefined) {
       if (updates.type === 'all') params.delete('type');
       else params.set('type', updates.type);
     }
     if (updates.sort !== undefined) params.set('sort', updates.sort);
+    if (updates.tag_ids !== undefined) {
+      if (updates.tag_ids) params.set('tag_ids', updates.tag_ids);
+      else params.delete('tag_ids');
+    }
     router.push(`/app?${params.toString()}`);
   }
 
@@ -111,6 +118,9 @@ export function ItemList({
                     <p className="mt-0.5 truncate text-sm text-neutral-600 dark:text-neutral-400">
                       {item.description}
                     </p>
+                    {item.tags?.length ? (
+                      <TagChips tags={item.tags} basePath="/app" tagIdsFilter={tagIdsFilter} />
+                    ) : null}
                     <p className="mt-1 text-xs text-neutral-500">{formatDate(item.created_at)}</p>
                   </Link>
                   <div className="shrink-0" onClick={(e) => e.preventDefault()}>

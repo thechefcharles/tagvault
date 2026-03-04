@@ -1,6 +1,6 @@
 import * as Sentry from '@sentry/nextjs';
 import { NextResponse } from 'next/server';
-import { requireUser } from '@/lib/server/auth';
+import { requireActiveOrg } from '@/lib/server/auth';
 import { apiError } from '@/lib/api/response';
 import { assertWithinLimits, incrementUsage, EntitlementError } from '@/lib/entitlements';
 import { getQueryEmbedding } from '@/lib/embeddings';
@@ -13,7 +13,7 @@ export async function GET(request: Request) {
   const start = Date.now();
   let userId: string | undefined;
   try {
-    const user = await requireUser();
+    const { user, activeOrgId } = await requireActiveOrg();
     userId = user.id;
     const key = getRateLimitKey('search', request, user.id);
     const rlResult = await rateLimitOrThrow({ key, limit: 60, windowSec: 60 });
@@ -21,6 +21,10 @@ export async function GET(request: Request) {
     const q = (searchParams.get('q') ?? '').trim();
     const type = (searchParams.get('type') ?? 'all') as 'link' | 'file' | 'note' | 'all';
     const sort = (searchParams.get('sort') ?? 'best_match') as 'best_match' | 'priority' | 'recent';
+    const tagIdsParam = searchParams.get('tag_ids');
+    const tagIds = tagIdsParam
+      ? tagIdsParam.split(',').map((s) => s.trim()).filter(Boolean)
+      : undefined;
     const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') ?? '50', 10) || 50));
     const cursorRaw = searchParams.get('cursor');
     const offset = cursorRaw ? Math.max(0, parseInt(cursorRaw, 10) || 0) : 0;
@@ -29,7 +33,7 @@ export async function GET(request: Request) {
 
     if (q.trim()) {
       try {
-        await assertWithinLimits({ userId: user.id, action: 'searches_run' });
+        await assertWithinLimits({ userId: user.id, orgId: activeOrgId, action: 'searches_run' });
       } catch (e) {
         if (e instanceof EntitlementError) {
           return apiError('PLAN_LIMIT_EXCEEDED', e.message, undefined, 402);
@@ -44,6 +48,7 @@ export async function GET(request: Request) {
 
     const fetchLimit = limit + 1;
     const items = await searchItemsHybrid({
+      orgId: activeOrgId,
       userId: user.id,
       q,
       type,
@@ -52,6 +57,7 @@ export async function GET(request: Request) {
       offset,
       useSemantic: semantic,
       queryEmbedding,
+      tagIds,
     });
 
     const hasMore = items.length > limit;

@@ -1,13 +1,13 @@
 import * as Sentry from '@sentry/nextjs';
 import { NextRequest, NextResponse } from 'next/server';
-import { requireUser } from '@/lib/server/auth';
+import { requireActiveOrg } from '@/lib/server/auth';
 import { createClient } from '@/lib/supabase/server';
 import { getQueryEmbedding } from '@/lib/embeddings';
 import { searchItemsHybrid } from '@/lib/db/search-hybrid';
 
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const user = await requireUser();
+    const { user, activeOrgId } = await requireActiveOrg();
     const { id } = await params;
     const supabase = await createClient();
 
@@ -15,15 +15,16 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       .from('saved_searches')
       .select('*')
       .eq('id', id)
-      .eq('owner_user_id', user.id)
+      .eq('org_id', activeOrgId)
       .single();
 
     if (error || !saved) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
 
-    const filters = (saved.filters ?? {}) as { type?: string[] };
+    const filters = (saved.filters ?? {}) as { type?: string[]; tag_ids?: string[] };
     const type = filters.type?.[0] ?? 'all';
+    const tagIds = Array.isArray(filters.tag_ids) ? filters.tag_ids : undefined;
 
     let queryEmbedding: number[] | null = null;
     if (saved.semantic_enabled && saved.query?.trim()) {
@@ -31,6 +32,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     }
 
     const items = await searchItemsHybrid({
+      orgId: activeOrgId,
       userId: user.id,
       q: saved.query ?? '',
       type: type as 'link' | 'file' | 'note' | 'all',
@@ -39,11 +41,12 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       offset: 0,
       useSemantic: saved.semantic_enabled,
       queryEmbedding,
+      tagIds,
     });
 
     return NextResponse.json(items);
   } catch (err) {
-    if (err instanceof Error && err.message === 'Unauthenticated') {
+    if (err instanceof Error && (err.message === 'Unauthenticated' || err.message === 'No active org')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     Sentry.captureException(err);

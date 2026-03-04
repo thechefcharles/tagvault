@@ -4,11 +4,6 @@ import { NextResponse, type NextRequest } from 'next/server';
 export async function updateSession(request: NextRequest) {
   const { pathname, searchParams } = request.nextUrl;
 
-  // Root redirect in middleware (avoids root page Server Component execution)
-  if (pathname === '/') {
-    return NextResponse.redirect(new URL('/app', request.url));
-  }
-
   // Auth callback: Supabase redirects with ?code= after email confirmation.
   // Redirect to our callback route to exchange the code for a session.
   const code = searchParams.get('code');
@@ -34,6 +29,11 @@ export async function updateSession(request: NextRequest) {
     pathname.startsWith('/saved-searches') ||
     pathname.startsWith('/alerts') ||
     pathname.startsWith('/notifications') ||
+    pathname.startsWith('/orgs') ||
+    pathname.startsWith('/tags') ||
+    pathname.startsWith('/collections') ||
+    pathname.startsWith('/settings') ||
+    pathname.startsWith('/onboarding') ||
     pathname.startsWith('/admin');
 
   if (!supabaseUrl || !supabaseAnonKey) {
@@ -60,7 +60,13 @@ export async function updateSession(request: NextRequest) {
         },
       },
     });
-    const { data } = await supabase.auth.getUser();
+    // getUser validates with Supabase; timeout prevents hang if Supabase is unreachable
+    const { data } = await Promise.race([
+      supabase.auth.getUser(),
+      new Promise<{ data: { user: null } }>((resolve) =>
+        setTimeout(() => resolve({ data: { user: null } }), 1500),
+      ),
+    ]);
     user = data.user;
   } catch {
     // Supabase auth failed (e.g. network); treat as unauthenticated
@@ -75,6 +81,13 @@ export async function updateSession(request: NextRequest) {
   if ((pathname === '/login' || pathname === '/signup') && user) {
     const url = request.nextUrl.clone();
     url.pathname = '/app';
+    return NextResponse.redirect(url);
+  }
+
+  // Root redirect: send unauthenticated to login, authenticated to app
+  if (pathname === '/') {
+    const url = request.nextUrl.clone();
+    url.pathname = user ? '/app' : '/login';
     return NextResponse.redirect(url);
   }
 

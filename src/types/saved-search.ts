@@ -1,5 +1,6 @@
 export type SavedSearchFilters = {
   tags?: string[];
+  tag_ids?: string[];
   type?: string[];
   date_from?: string;
   date_to?: string;

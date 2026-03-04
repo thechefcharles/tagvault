@@ -18,5 +18,9 @@ export async function GET(request: Request) {
     return NextResponse.redirect(new URL('/login?error=auth_failed', request.url));
   }
 
-  return NextResponse.redirect(new URL(next, request.url));
+  const target = next || '/app';
+  if (target === '/app') {
+    return NextResponse.redirect(new URL('/onboarding?next=/app', request.url));
+  }
+  return NextResponse.redirect(new URL(target, request.url));
 }

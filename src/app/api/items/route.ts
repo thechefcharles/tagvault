@@ -1,6 +1,6 @@
 import * as Sentry from '@sentry/nextjs';
 import { NextResponse } from 'next/server';
-import { requireUser } from '@/lib/server/auth';
+import { requireActiveOrg } from '@/lib/server/auth';
 import { listItems, createItem } from '@/lib/db/items';
 import { createItemSchema } from '@/lib/db/validators';
 import { checkRateLimit, getRateLimitKey } from '@/lib/rateLimit';
@@ -12,20 +12,26 @@ export async function GET(request: Request) {
   const requestId = crypto.randomUUID();
   const start = Date.now();
   try {
-    const user = await requireUser();
+    const { user, activeOrgId } = await requireActiveOrg();
     const { searchParams } = new URL(request.url);
     const type = searchParams.get('type') as 'link' | 'file' | 'note' | null;
     const sort = (searchParams.get('sort') as 'recent' | 'priority') ?? 'recent';
     const cursor = searchParams.get('cursor') ?? undefined;
+    const tagIdsParam = searchParams.get('tag_ids');
+    const tagIds = tagIdsParam
+      ? tagIdsParam.split(',').map((s) => s.trim()).filter(Boolean)
+      : undefined;
     const limitParam = searchParams.get('limit');
     const limit = limitParam ? Math.min(100, Math.max(1, parseInt(limitParam, 10))) : 25;
 
     const { items, nextCursor } = await listItems({
+      orgId: activeOrgId,
       userId: user.id,
       type: type ?? undefined,
       sort,
       limit,
       cursor,
+      tagIds,
     });
     const res = NextResponse.json({ items, nextCursor });
     logApi({
@@ -39,7 +45,7 @@ export async function GET(request: Request) {
     return res;
   } catch (err) {
     const ms = Date.now() - start;
-    if (err instanceof Error && err.message === 'Unauthenticated') {
+    if (err instanceof Error && (err.message === 'Unauthenticated' || err.message === 'No active org')) {
       logApi({ requestId, path: '/api/items', method: 'GET', status: 401, ms });
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -54,7 +60,7 @@ export async function POST(request: Request) {
   const requestId = crypto.randomUUID();
   const start = Date.now();
   try {
-    const user = await requireUser();
+    const { user, activeOrgId } = await requireActiveOrg();
     const key = getRateLimitKey('items', request, user.id);
     const rl = await checkRateLimit(key, { limit: 30, windowSec: 60 });
     if (!rl.ok) {
@@ -91,8 +97,8 @@ export async function POST(request: Request) {
     }
 
     try {
-      await assertWithinLimits({ userId: user.id, action: 'items_create' });
-      await assertWithinLimits({ userId: user.id, action: 'embeddings_enqueue' });
+      await assertWithinLimits({ userId: user.id, orgId: activeOrgId, action: 'items_create' });
+      await assertWithinLimits({ userId: user.id, orgId: activeOrgId, action: 'embeddings_enqueue' });
     } catch (e) {
       if (e instanceof EntitlementError) {
         return apiError('PLAN_LIMIT_EXCEEDED', e.message, undefined, 402);
@@ -101,6 +107,7 @@ export async function POST(request: Request) {
     }
 
     const item = await createItem({
+      orgId: activeOrgId,
       userId: user.id,
       payload: parsed.data,
     });
@@ -119,7 +126,7 @@ export async function POST(request: Request) {
     return NextResponse.json(item);
   } catch (err) {
     const ms = Date.now() - start;
-    if (err instanceof Error && err.message === 'Unauthenticated') {
+    if (err instanceof Error && (err.message === 'Unauthenticated' || err.message === 'No active org')) {
       logApi({ requestId, path: '/api/items', method: 'POST', status: 401, ms });
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }

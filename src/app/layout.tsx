@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
-import * as Sentry from '@sentry/nextjs';
 import localFont from 'next/font/local';
+import { PwaRegister } from '@/components/PwaRegister';
+import { CapacitorLinkHandler } from '@/components/native/CapacitorLinkHandler';
 import './globals.css';
 
 const geistSans = localFont({
@@ -17,9 +18,20 @@ const geistMono = localFont({
 export const metadata: Metadata = {
   title: 'TagVault',
   description: 'Store and organize your items with priority and timestamps',
-  other: {
-    ...Sentry.getTraceData(),
+  applicationName: 'TagVault',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'TagVault',
   },
+  manifest: '/manifest.webmanifest',
+  icons: {
+    apple: '/icons/icon-192.png',
+  },
+};
+
+export const viewport = {
+  themeColor: '#0B0B0F',
 };
 
 export default function RootLayout({
@@ -29,7 +41,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>{children}</body>
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+        {children}
+        <PwaRegister />
+        <CapacitorLinkHandler />
+      </body>
     </html>
   );
 }
