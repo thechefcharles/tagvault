@@ -4,7 +4,7 @@ import { apiOk, apiError, buildApiContext } from '@/lib/api/response';
 import { getStripe } from '@/lib/stripe';
 import { getBillingAccount } from '@/lib/billing';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { rateLimitOrThrow, RateLimitError } from '@/lib/rateLimit';
+import { rateLimitOrThrow, RateLimitError, getRateLimitKey } from '@/lib/rateLimit';
 import { logApi } from '@/lib/apiLog';
 
 function getBaseUrl(request: NextRequest): string {
@@ -25,7 +25,8 @@ export async function POST(request: NextRequest) {
   let user: { id: string; email?: string };
   try {
     user = await requireUser();
-    await rateLimitOrThrow({ key: `user:${user.id}:checkout`, limit: 10, windowSec: 60 });
+    const key = getRateLimitKey('billing:checkout', request, user.id);
+    await rateLimitOrThrow({ key, limit: 10, windowSec: 60 });
   } catch (e) {
     const ms = Date.now() - start;
     if (e instanceof RateLimitError) {
@@ -37,7 +38,11 @@ export async function POST(request: NextRequest) {
         ms,
         errorCode: 'RATE_LIMITED',
       });
-      return apiError('RATE_LIMITED', 'Too many requests', { retryAfter: e.retryAfter }, 429, ctx());
+      const res = apiError('RATE_LIMITED', 'Too many requests', {
+        retry_after_seconds: e.retryAfter,
+      }, 429, ctx());
+      e.headers.forEach((v, k) => res.headers.set(k, v));
+      return res;
     }
     logApi({
       requestId: request.headers.get('x-request-id') ?? crypto.randomUUID(),

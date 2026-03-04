@@ -1,4 +1,4 @@
 /**
- * Re-exports distributed rate limiting. Use checkRateLimit(identifier) and await it.
+ * Re-exports distributed rate limiting.
  */
-export { checkRateLimit } from '@/lib/rateLimit';
+export { checkRateLimit, getRateLimitKey, getClientIp } from '@/lib/rateLimit';

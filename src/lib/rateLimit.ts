@@ -1,63 +1,27 @@
 /**
  * Distributed rate limiting via Upstash Redis.
- * When Redis is not configured (dev), allows requests and logs a warning once.
+ * Uses server/rateLimit (INCR + EXPIRE) and server/redis.
+ * When Redis is not configured, allows requests and logs a warning once.
  */
 
-import { Redis } from '@upstash/redis';
-import { Ratelimit } from '@upstash/ratelimit';
+import {
+  rateLimit as serverRateLimit,
+  getRateLimitKey,
+  getClientIp,
+  type RateLimitResult,
+} from '@/lib/server/rateLimit';
+
+export { getClientIp, getRateLimitKey };
 
 export class RateLimitError extends Error {
   constructor(
     message: string,
     public readonly retryAfter: number,
+    public readonly headers: Headers,
   ) {
     super(message);
     this.name = 'RateLimitError';
   }
-}
-
-let redisWarned = false;
-const limiterCache = new Map<string, Ratelimit>();
-
-function hasRedis(): boolean {
-  const url = process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
-  return !!(url && token);
-}
-
-function warnRedisOnce(): void {
-  if (!redisWarned && !hasRedis()) {
-    redisWarned = true;
-    console.warn('[rateLimit] UPSTASH_REDIS_REST_URL/TOKEN not set; rate limiting disabled in dev');
-  }
-}
-
-function getRatelimit(limit: number, windowSec: number): Ratelimit {
-  const cacheKey = `rl:${limit}:${windowSec}`;
-  let rl = limiterCache.get(cacheKey);
-  if (!rl) {
-    const url = process.env.UPSTASH_REDIS_REST_URL!;
-    const token = process.env.UPSTASH_REDIS_REST_TOKEN!;
-    const redis = new Redis({ url, token });
-    rl = new Ratelimit({
-      redis,
-      limiter: Ratelimit.slidingWindow(limit, `${windowSec} s`),
-    });
-    limiterCache.set(cacheKey, rl);
-  }
-  return rl;
-}
-
-/** Extract client IP from request headers (x-forwarded-for, x-real-ip). */
-export function getClientIp(req: Request): string | null {
-  const forwarded = req.headers.get('x-forwarded-for');
-  if (forwarded) {
-    const first = forwarded.split(',')[0]?.trim();
-    if (first) return first;
-  }
-  const real = req.headers.get('x-real-ip');
-  if (real) return real;
-  return null;
 }
 
 /** Ensure request is within rate limit; throws RateLimitError if exceeded. */
@@ -65,36 +29,40 @@ export async function rateLimitOrThrow(opts: {
   key: string;
   limit: number;
   windowSec: number;
-}): Promise<void> {
-  const { key, limit, windowSec } = opts;
-
-  if (!hasRedis()) {
-    warnRedisOnce();
-    return;
+}): Promise<RateLimitResult | void> {
+  const result = await serverRateLimit({
+    key: opts.key,
+    limit: opts.limit,
+    windowSeconds: opts.windowSec,
+  });
+  if (!result.ok) {
+    throw new RateLimitError(
+      'Too many requests',
+      result.retryAfter ?? 60,
+      result.headers,
+    );
   }
-
-  const rl = getRatelimit(limit, windowSec);
-  const result = await rl.limit(key);
-  if (!result.success) {
-    const retryAfter = Math.max(1, Math.ceil((result.reset - Date.now()) / 1000));
-    throw new RateLimitError('Too many requests', retryAfter);
-  }
+  return result as RateLimitResult;
 }
 
-/** Check rate limit; returns { ok, retryAfter } for backward compatibility. */
+/** Check rate limit; returns { ok, retryAfter, headers }. */
 export async function checkRateLimit(
   identifier: string,
   options?: { limit?: number; windowSec?: number },
-): Promise<{ ok: boolean; retryAfter?: number }> {
+): Promise<{ ok: boolean; retryAfter?: number; headers: Headers }> {
   const limit = options?.limit ?? 30;
   const windowSec = options?.windowSec ?? 60;
-  try {
-    await rateLimitOrThrow({ key: identifier, limit, windowSec });
-    return { ok: true };
-  } catch (e) {
-    if (e instanceof RateLimitError) {
-      return { ok: false, retryAfter: e.retryAfter };
-    }
-    throw e;
+  const result = await serverRateLimit({
+    key: identifier,
+    limit,
+    windowSeconds: windowSec,
+  });
+  if (result.ok) {
+    return { ok: true, headers: result.headers };
   }
+  return {
+    ok: false,
+    retryAfter: result.retryAfter,
+    headers: result.headers,
+  };
 }

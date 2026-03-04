@@ -1,31 +1,37 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { Redis } from '@upstash/redis';
+import { getRedis } from '@/lib/server/redis';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
   const start = Date.now();
-  const env = process.env.NODE_ENV ?? 'development';
-  const checks: { db: string; redis: string; stripe: string } = {
-    db: 'skip',
+  const version =
+    process.env.SENTRY_RELEASE ?? process.env.VERCEL_GIT_COMMIT_SHA ?? undefined;
+
+  const checks: {
+    db: { ok: boolean; error?: string };
+    redis: 'ok' | 'fail' | 'skip';
+    sentry: boolean;
+  } = {
+    db: { ok: true },
     redis: 'skip',
-    stripe: 'skip',
+    sentry: !!(process.env.SENTRY_DSN ?? process.env.NEXT_PUBLIC_SENTRY_DSN),
   };
 
   try {
     const supabase = await createClient();
     const { error } = await supabase.from('profiles').select('id').limit(1).maybeSingle();
-    checks.db = error ? 'fail' : 'ok';
-  } catch {
-    checks.db = 'fail';
+    if (error) {
+      checks.db = { ok: false, error: error.message };
+    }
+  } catch (e) {
+    checks.db = { ok: false, error: e instanceof Error ? e.message : 'Unknown error' };
   }
 
-  const redisUrl = process.env.UPSTASH_REDIS_REST_URL;
-  const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN;
-  if (redisUrl && redisToken) {
+  const redis = getRedis();
+  if (redis) {
     try {
-      const redis = new Redis({ url: redisUrl, token: redisToken });
       await redis.get('health:ping');
       checks.redis = 'ok';
     } catch {
@@ -33,14 +39,21 @@ export async function GET() {
     }
   }
 
-  const stripeKey = process.env.STRIPE_SECRET_KEY;
-  checks.stripe = stripeKey ? 'ok' : 'skip';
-
-  return NextResponse.json({
-    ok: true,
-    env,
+  const body = {
+    ok: checks.db.ok,
     time: new Date().toISOString(),
-    checks,
+    version: version ?? null,
+    checks: {
+      db: checks.db,
+      redis: checks.redis,
+      sentry: checks.sentry,
+    },
     ms: Date.now() - start,
-  });
+  };
+
+  if (!checks.db.ok) {
+    return NextResponse.json(body, { status: 503 });
+  }
+
+  return NextResponse.json(body, { status: 200 });
 }

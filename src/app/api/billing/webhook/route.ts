@@ -1,6 +1,8 @@
+import * as Sentry from '@sentry/nextjs';
 import { NextRequest, NextResponse } from 'next/server';
 import { getStripe } from '@/lib/stripe';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { checkRateLimit, getRateLimitKey } from '@/lib/rateLimit';
 import Stripe from 'stripe';
 
 export const runtime = 'nodejs';
@@ -131,11 +133,25 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Missing webhook secret or signature' }, { status: 400 });
   }
 
+  const key = getRateLimitKey('billing:webhook', request, null);
+  const rl = await checkRateLimit(key, { limit: 200, windowSec: 60 });
+  if (!rl.ok) {
+    const res = NextResponse.json(
+      { error: 'Too many requests', retry_after_seconds: rl.retryAfter },
+      { status: 429 },
+    );
+    rl.headers.forEach((v, k) => res.headers.set(k, v));
+    return res;
+  }
+
   let event: Stripe.Event;
   try {
     const stripe = getStripe();
     event = stripe.webhooks.constructEvent(body, sig, secret);
   } catch (err) {
+    Sentry.captureException(err, {
+      tags: { area: 'billing', route: 'webhook', phase: 'verify' },
+    });
     const msg = err instanceof Error ? err.message : 'Invalid signature';
     return NextResponse.json({ error: msg }, { status: 400 });
   }
@@ -147,8 +163,37 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ received: true });
   }
 
-  try {
-    switch (event.type) {
+  return await Sentry.startSpan(
+    {
+      name: 'billing.webhook.process',
+      op: 'http.server',
+      attributes: {
+        'sentry.event_id': event.id,
+        'sentry.event_type': event.type,
+      },
+    },
+    async () => {
+      try {
+        return await processWebhookEvent(admin, event);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        Sentry.captureException(err, {
+          tags: { area: 'billing', route: 'webhook' },
+          extra: { event_id: event.id, event_type: event.type },
+        });
+        logWebhook(event.id, event.type, 'handler failed', { error: msg });
+        await recordWebhookFailure(admin, event.id, msg);
+        return NextResponse.json({ error: 'Webhook handler failed' }, { status: 500 });
+      }
+    },
+  );
+}
+
+async function processWebhookEvent(
+  admin: ReturnType<typeof createAdminClient>,
+  event: Stripe.Event,
+): Promise<NextResponse> {
+  switch (event.type) {
       case 'checkout.session.completed': {
         const session = event.data.object as Stripe.Checkout.Session;
         const customerId =
@@ -298,15 +343,9 @@ export async function POST(request: NextRequest) {
         break;
       }
 
-      default:
-        logWebhook(event.id, event.type, 'unhandled type');
-        break;
-    }
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    logWebhook(event.id, event.type, 'handler failed', { error: msg });
-    await recordWebhookFailure(admin, event.id, msg);
-    return NextResponse.json({ error: 'Webhook handler failed' }, { status: 500 });
+    default:
+      logWebhook(event.id, event.type, 'unhandled type');
+      break;
   }
 
   return NextResponse.json({ received: true });
