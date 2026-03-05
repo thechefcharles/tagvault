@@ -1,5 +1,6 @@
 {
   "name": "tagvault-app",
+  "packageManager": "pnpm@9.15.9",
   "pnpm": {
     "packageExtensions": {
       "plist": {
