@@ -1,6 +1,7 @@
 import * as Sentry from '@sentry/nextjs';
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { sendPushToUsers } from '@/lib/server/push/onesignal';
 import { withCronLock } from '@/lib/server/cronLock';
 import {
   recordCronStarted,
@@ -130,6 +131,14 @@ export async function POST(request: NextRequest) {
               .update({ last_digest_at: now.toISOString(), updated_at: now.toISOString() })
               .eq('user_id', user_id)
               .eq('org_id', org_id);
+            void sendPushToUsers({
+              orgId: org_id,
+              userIds: [user_id],
+              title: 'Your TagVault Digest',
+              body: 'Your saved items digest is ready',
+              url: '/notifications',
+              kind: 'digest',
+            });
           }
         }
 

@@ -14,6 +14,7 @@ const config: CapacitorConfig = {
   },
   ios: {
     contentInset: 'automatic',
+    handleApplicationNotifications: false, // OneSignal handles push
   },
 };
 
