@@ -227,6 +227,41 @@ When handling ACTION_SEND (step 4), we `startActivity` with `tagvault://share-im
 
 ---
 
+## Auditing the share flow (iOS)
+
+When the share sheet shows a gray screen for a second then returns to Safari, the extension is running but the main app may not be opening. Use these steps to see what’s happening.
+
+### 1. View Share Extension logs
+
+1. Connect the iPhone via **USB**.
+2. On Mac: open **Console.app** (Applications → Utilities).
+3. Select the **iPhone** in the left sidebar.
+4. In the search bar, enter: `com.tagvault.app.ShareExtension` or `Share`.
+5. Trigger a share from Safari (e.g. share a link → choose TagVault).
+6. In Console you should see lines like:
+   - `Extracted payload kind=url` – extension got the link.
+   - `openURL performed on responder` – open was sent.
+   - `No responder for openURL:` – main app will not open (responder chain failed).
+
+### 2. What to check
+
+| Log / behavior | Meaning |
+|----------------|--------|
+| No “Extracted payload” | Safari didn’t pass a URL (e.g. wrong type) or extraction failed. |
+| “No responder for openURL:” | Extension cannot open the app from this process; user may need to open TagVault manually; payload is still in App Group. |
+| “openURL performed” but app doesn’t open | URL scheme or app not opening (e.g. iOS 18 restrictions). Try opening TagVault manually after sharing; go to `/share-import` to see if the payload is there. |
+| App opens but blank / gray | WebView or auth: ensure you’re logged in; check Safari Web Inspector for the device for JS errors. |
+
+### 3. Share Extension UI
+
+The Share Extension shows “Saving to TagVault…” so you get a short message instead of an empty gray screen. After ~0.8s it dismisses. If the main app doesn’t open, open TagVault yourself and go to **Share Import** (or `/share-import`) to use the saved payload.
+
+### 4. LSApplicationQueriesSchemes
+
+The Share Extension’s `Info.plist` includes `LSApplicationQueriesSchemes` with `tagvault` so the system allows querying that URL scheme. Without it, opening the app from the extension can fail on some iOS versions.
+
+---
+
 ## Verification
 
 - [ ] iOS: Share a URL from Safari → TagVault appears in share sheet → Opens at `/share-import` → Quick Save works
