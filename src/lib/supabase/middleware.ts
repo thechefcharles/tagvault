@@ -25,6 +25,7 @@ export async function updateSession(request: NextRequest) {
 
   const isProtected =
     pathname.startsWith('/app') ||
+    pathname === '/share-import' ||
     pathname === '/search' ||
     pathname.startsWith('/saved-searches') ||
     pathname.startsWith('/alerts') ||
@@ -75,6 +76,7 @@ export async function updateSession(request: NextRequest) {
   if (isProtected && !user) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
+    url.searchParams.set('next', pathname);
     return NextResponse.redirect(url);
   }
 
