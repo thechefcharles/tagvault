@@ -5,13 +5,15 @@ import MobileCoreServices
 import os.log
 
 private let appGroupId = "group.com.tagvault.app"
-private let payloadKey = "pending_share_payload_v1"
+private let queueKey = "pending_share_payload_queue_v1"
+private let legacyKey = "pending_share_payload_v1"
 private let openUrl = "tagvault://share-import"
 private let log = OSLog(subsystem: "com.tagvault.app.ShareExtension", category: "Share")
 
 class ShareViewController: UIViewController {
 
     private var statusLabel: UILabel!
+    private var hintLabel: UILabel!
     private var openButton: UIButton!
 
     override func viewDidLoad() {
@@ -25,6 +27,16 @@ class ShareViewController: UIViewController {
         statusLabel.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(statusLabel)
 
+        hintLabel = UILabel()
+        hintLabel.text = "If the app didn't open, open TagVault from your home screen and go to Share Import."
+        hintLabel.font = .systemFont(ofSize: 12)
+        hintLabel.textColor = .secondaryLabel
+        hintLabel.textAlignment = .center
+        hintLabel.numberOfLines = 0
+        hintLabel.isHidden = true
+        hintLabel.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(hintLabel)
+
         openButton = UIButton(type: .system)
         openButton.setTitle("Open TagVault", for: .normal)
         openButton.titleLabel?.font = .systemFont(ofSize: 17, weight: .semibold)
@@ -35,19 +47,21 @@ class ShareViewController: UIViewController {
 
         NSLayoutConstraint.activate([
             statusLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            statusLabel.centerYAnchor.constraint(equalTo: view.centerYAnchor, constant: -24),
+            statusLabel.centerYAnchor.constraint(equalTo: view.centerYAnchor, constant: -36),
             statusLabel.leadingAnchor.constraint(greaterThanOrEqualTo: view.leadingAnchor, constant: 24),
             statusLabel.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -24),
             openButton.topAnchor.constraint(equalTo: statusLabel.bottomAnchor, constant: 20),
             openButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            hintLabel.topAnchor.constraint(equalTo: openButton.bottomAnchor, constant: 16),
+            hintLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 24),
+            hintLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24),
         ])
         handleShare()
     }
 
     @objc private func openTapped() {
         Task {
-            let opened = await openMainApp()
-            os_log(.info, log: log, "openMainApp (user tap) result=%{public}@", opened ? "true" : "false")
+            _ = await openMainApp()
             await MainActor.run { finishWithoutPayload() }
         }
     }
@@ -65,14 +79,29 @@ class ShareViewController: UIViewController {
                 os_log(.info, log: log, "Extracted payload kind=%{public}@", payload["kind"] as? String ?? "?")
                 await storePayload(payload)
                 await MainActor.run {
-                    statusLabel.text = "Saved!\nTap to open TagVault."
+                    statusLabel.text = "Saved!"
                     openButton.isHidden = false
+                    hintLabel.isHidden = false
                 }
             } else {
                 os_log(.info, log: log, "No payload extracted from attachments")
                 await MainActor.run { finishWithoutPayload() }
             }
         }
+    }
+
+    private func openMainApp() async -> Bool {
+        guard let url = URL(string: openUrl) else { return false }
+        let selector = sel_registerName("openURL:")
+        var responder: UIResponder? = self
+        while let r = responder {
+            if r.responds(to: selector) {
+                r.perform(selector, with: url)
+                return true
+            }
+            responder = r.next
+        }
+        return false
     }
 
     private func extractPayload(from attachments: [NSItemProvider]) async -> [String: Any]? {
@@ -133,26 +162,22 @@ class ShareViewController: UIViewController {
 
     private func storePayload(_ payload: [String: Any]) async {
         guard let ud = UserDefaults(suiteName: appGroupId) else { return }
-        guard let data = try? JSONSerialization.data(withJSONObject: payload),
-              let jsonString = String(data: data, encoding: .utf8) else { return }
-        ud.set(jsonString, forKey: payloadKey)
-        ud.synchronize()
-    }
-
-    private func openMainApp() async -> Bool {
-        guard let url = URL(string: openUrl) else { return false }
-        let selector = sel_registerName("openURL:")
-        var responder: UIResponder? = self
-        while let r = responder {
-            if r.responds(to: selector) {
-                r.perform(selector, with: url)
-                os_log(.info, log: log, "openURL performed on responder")
-                return true
-            }
-            responder = r.next
+        var queue: [[String: Any]] = []
+        if let queueString = ud.string(forKey: queueKey),
+           let data = queueString.data(using: .utf8),
+           let arr = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
+            queue = arr
+        } else if let legacyString = ud.string(forKey: legacyKey),
+                  let data = legacyString.data(using: .utf8),
+                  let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            queue = [dict]
+            ud.removeObject(forKey: legacyKey)
         }
-        os_log(.error, log: log, "No responder for openURL: - main app may not open")
-        return false
+        queue.append(payload)
+        guard let outData = try? JSONSerialization.data(withJSONObject: queue),
+              let outString = String(data: outData, encoding: .utf8) else { return }
+        ud.set(outString, forKey: queueKey)
+        ud.synchronize()
     }
 
     private func finishWithoutPayload() {

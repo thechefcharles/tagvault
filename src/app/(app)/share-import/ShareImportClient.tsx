@@ -1,7 +1,7 @@
 'use client';
 
 import * as Sentry from '@sentry/nextjs';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { SharePayloadPlugin } from '@/lib/native/SharePayloadPlugin';
@@ -15,10 +15,30 @@ function getPlatformTag(): string {
   return cap?.getPlatform?.() ?? 'web';
 }
 
+function fillFormFromPayload(p: PendingSharePayload): { title: string; description: string } {
+  if (p.kind === 'url' && p.url) {
+    return {
+      title: p.url.replace(/^https?:\/\//, '').split('/')[0] || 'Link',
+      description: '',
+    };
+  }
+  if (p.kind === 'text' && p.text) {
+    const text = p.text.trim();
+    return {
+      title: text.slice(0, 50) + (text.length > 50 ? '…' : ''),
+      description: text.length <= 500 ? text : text.slice(0, 497) + '…',
+    };
+  }
+  if (p.kind === 'file' && p.fileName) {
+    return { title: p.fileName, description: '' };
+  }
+  return { title: '', description: '' };
+}
+
 export function ShareImportClient() {
   const router = useRouter();
   const descriptionRef = useRef<HTMLTextAreaElement>(null);
-  const [payload, setPayload] = useState<PendingSharePayload | null | 'loading' | 'none'>('loading');
+  const [payloads, setPayloads] = useState<PendingSharePayload[] | 'loading' | 'none'>('loading');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState('');
@@ -26,42 +46,47 @@ export function ShareImportClient() {
   const [isPlanLimit, setIsPlanLimit] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
+  const fetchPayloads = useCallback(() => {
     if (!isCapacitor()) {
-      setPayload('none');
+      setPayloads('none');
       return;
     }
     SharePayloadPlugin.getPendingPayload()
-      .then(({ payload: p }) => {
-        setPayload(p ?? 'none');
-        if (p) {
-          if (p.kind === 'url' && p.url) {
-            setTitle(p.url.replace(/^https?:\/\//, '').split('/')[0] || 'Link');
-            setDescription('');
-          } else if (p.kind === 'text' && p.text) {
-            const text = p.text.trim();
-            setDescription(text.length <= 500 ? text : text.slice(0, 497) + '…');
-            setTitle(text.slice(0, 50) + (text.length > 50 ? '…' : ''));
-          } else if (p.kind === 'file' && p.fileName) {
-            setTitle(p.fileName);
-            setDescription('');
-          }
+      .then(({ payloads: list }) => {
+        if (!list || list.length === 0) setPayloads('none');
+        else {
+          setPayloads(list);
+          const p = list[0];
+          const { title: t, description: d } = fillFormFromPayload(p);
+          setTitle(t);
+          setDescription(d);
         }
       })
-      .catch(() => setPayload('none'));
+      .catch(() => setPayloads('none'));
   }, []);
 
   useEffect(() => {
-    if (payload && payload !== 'loading' && payload !== 'none' && descriptionRef.current) {
+    fetchPayloads();
+  }, [fetchPayloads]);
+
+  useEffect(() => {
+    if (payloads !== 'loading' && payloads !== 'none' && payloads.length > 0 && descriptionRef.current) {
       descriptionRef.current.focus();
     }
-  }, [payload]);
+  }, [payloads]);
+
+  useEffect(() => {
+    if (payloads !== 'loading' && payloads !== 'none' && payloads.length > 0) {
+      const { title: t, description: d } = fillFormFromPayload(payloads[0]);
+      setTitle(t);
+      setDescription(d);
+    }
+  }, [payloads === 'loading' ? 0 : payloads === 'none' ? 0 : payloads.length]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const p = payload;
-    if (!p || p === 'loading' || p === 'none') return;
-    const payloadData = p as PendingSharePayload;
+    if (payloads === 'loading' || payloads === 'none' || payloads.length === 0) return;
+    const payloadData = payloads[0];
     setError(null);
     setLoading(true);
 
@@ -119,9 +144,10 @@ export function ShareImportClient() {
         }
       }
 
-      await SharePayloadPlugin.clearPendingPayload();
-      router.push('/app');
-      router.refresh();
+      await SharePayloadPlugin.clearPendingPayload({ index: 0 });
+      setLoading(false);
+      setPayloads('loading');
+      fetchPayloads();
     } catch (err) {
       Sentry.captureException(err, {
         tags: { area: 'share_import', platform: getPlatformTag(), kind: payloadData.kind },
@@ -131,7 +157,14 @@ export function ShareImportClient() {
     }
   }
 
-  if (payload === 'loading') {
+  async function handleDiscard() {
+    if (payloads === 'loading' || payloads === 'none' || payloads.length === 0) return;
+    await SharePayloadPlugin.clearPendingPayload({ index: 0 });
+    setPayloads('loading');
+    fetchPayloads();
+  }
+
+  if (payloads === 'loading') {
     return (
       <div className="rounded-lg border border-neutral-200 bg-white p-6 dark:border-neutral-700 dark:bg-neutral-900">
         <p className="text-neutral-500 dark:text-neutral-400">Loading shared content…</p>
@@ -139,7 +172,7 @@ export function ShareImportClient() {
     );
   }
 
-  if (payload === 'none') {
+  if (payloads === 'none') {
     return (
       <div className="rounded-lg border border-neutral-200 bg-white p-6 dark:border-neutral-700 dark:bg-neutral-900">
         <h1 className="mb-2 text-lg font-semibold">Share Import</h1>
@@ -156,11 +189,17 @@ export function ShareImportClient() {
     );
   }
 
-  const p = payload as PendingSharePayload;
+  const p = payloads[0];
+  const total = payloads.length;
 
   return (
     <div className="rounded-lg border border-neutral-200 bg-white p-6 dark:border-neutral-700 dark:bg-neutral-900">
-      <h1 className="mb-4 text-lg font-semibold">Quick Save</h1>
+      <h1 className="mb-1 text-lg font-semibold">Quick Save</h1>
+      {total > 1 && (
+        <p className="mb-4 text-sm text-neutral-500 dark:text-neutral-400">
+          Item 1 of {total} in queue
+        </p>
+      )}
       <p className="mb-4 text-sm text-neutral-500 dark:text-neutral-400">
         {p.kind === 'url' && 'Save this link to your vault'}
         {p.kind === 'text' && 'Save this note'}
@@ -226,13 +265,20 @@ export function ShareImportClient() {
             )}
           </div>
         )}
-        <div className="flex gap-2 pt-2">
+        <div className="flex flex-wrap gap-2 pt-2">
           <button
             type="button"
             onClick={() => router.push('/app')}
             className="rounded-md border border-neutral-300 px-4 py-2 dark:border-neutral-600"
           >
             Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleDiscard}
+            className="rounded-md border border-neutral-300 px-4 py-2 dark:border-neutral-600"
+          >
+            Discard
           </button>
           <button
             type="submit"
