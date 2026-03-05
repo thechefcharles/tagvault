@@ -36,15 +36,15 @@ export function ShareImportClient() {
         setPayload(p ?? 'none');
         if (p) {
           if (p.kind === 'url' && p.url) {
-            setDescription(`Shared link: ${p.url}`);
             setTitle(p.url.replace(/^https?:\/\//, '').split('/')[0] || 'Link');
+            setDescription('');
           } else if (p.kind === 'text' && p.text) {
             const text = p.text.trim();
-            setDescription(text);
+            setDescription(text.length <= 500 ? text : text.slice(0, 497) + '…');
             setTitle(text.slice(0, 50) + (text.length > 50 ? '…' : ''));
           } else if (p.kind === 'file' && p.fileName) {
-            setDescription(`Shared file: ${p.fileName}`);
             setTitle(p.fileName);
+            setDescription('');
           }
         }
       })
@@ -166,6 +166,14 @@ export function ShareImportClient() {
         {p.kind === 'text' && 'Save this note'}
         {p.kind === 'file' && 'Save this file'}
       </p>
+      {p.kind === 'url' && p.url && (
+        <div className="mb-4">
+          <label className="mb-1 block text-sm font-medium text-neutral-600 dark:text-neutral-400">Link</label>
+          <p className="break-all rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-700 dark:border-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">
+            {p.url}
+          </p>
+        </div>
+      )}
       <form
         onSubmit={handleSubmit}
         onKeyDown={(e) => {
