@@ -1,9 +1,21 @@
 /**
  * Push notification init for Capacitor (OneSignal).
  * Only runs when isCapacitor() is true; web is unchanged.
+ * Handles tap routing for cold start, background, and foreground.
  */
 
 import { isCapacitor } from './capacitor';
+import { preparePushNavigation } from './deeplinkRouter';
+
+export type PushNavigateFn = (url: string) => void;
+
+/** Handle push tap: sanitize URL, prevent double-nav, log, and navigate. */
+export function handlePushOpen(
+  url: string | null | undefined,
+  navigate: (url: string) => void,
+): void {
+  preparePushNavigation(url, navigate);
+}
 
 function getPlatform(): 'ios' | 'android' | 'web' {
   if (typeof window === 'undefined') return 'web';
@@ -14,7 +26,9 @@ function getPlatform(): 'ios' | 'android' | 'web' {
   return 'web';
 }
 
-export async function initPush(): Promise<void> {
+let initialNotificationHandled = false;
+
+export async function initPush(navigate?: PushNavigateFn): Promise<void> {
   if (!isCapacitor()) return;
   if (typeof window === 'undefined') return;
 
@@ -24,6 +38,34 @@ export async function initPush(): Promise<void> {
   try {
     const OneSignal = (await import('onesignal-cordova-plugin')).default;
     OneSignal.initialize(appId);
+
+    const onNotificationOpen = (
+      notification: { additionalData?: Record<string, unknown> } | null,
+      nav: PushNavigateFn,
+    ) => {
+      const url = notification?.additionalData?.url;
+      if (url != null) handlePushOpen(String(url), nav);
+    };
+
+    if (navigate) {
+      OneSignal.Notifications.addEventListener('click', (event: unknown) => {
+        const ev = event as { notification?: { additionalData?: Record<string, unknown> } };
+        const url = ev?.notification?.additionalData?.url;
+        handlePushOpen(url != null ? String(url) : null, navigate);
+      });
+
+      const notif = OneSignal.Notifications as { getInitialNotification?: () => Promise<{ additionalData?: Record<string, unknown> } | null> };
+      const getInitialNotification = notif.getInitialNotification;
+      if (getInitialNotification && !initialNotificationHandled) {
+        initialNotificationHandled = true;
+        getInitialNotification()
+          .then((notification) => {
+            if (notification) onNotificationOpen(notification, navigate);
+          })
+          .catch(() => {});
+      }
+    }
+
     const accepted = await OneSignal.Notifications.requestPermission(false);
     if (accepted) {
       await registerPushDevice(OneSignal, getPlatform());

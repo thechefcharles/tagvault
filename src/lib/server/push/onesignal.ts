@@ -8,7 +8,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 
 const ONESIGNAL_API = 'https://api.onesignal.com/notifications';
 
-export type PushKind = 'alerts' | 'digest';
+export type PushKind = 'alert' | 'digest' | 'share';
 
 export type SendPushParams = {
   orgId: string;
@@ -17,7 +17,7 @@ export type SendPushParams = {
   body: string;
   url?: string;
   data?: Record<string, string>;
-  kind: PushKind;
+  kind?: PushKind;
 };
 
 async function getNotificationPrefs(
@@ -49,7 +49,7 @@ async function getNotificationPrefs(
     const pushAlerts = pref?.push_alerts ?? true;
     const pushDigest = pref?.push_digest ?? false;
     if (!pushEnabled) continue;
-    if (kind === 'alerts' && !pushAlerts) continue;
+    if (kind === 'alert' && !pushAlerts) continue;
     if (kind === 'digest' && !pushDigest) continue;
     allowed.add(uid);
   }
@@ -75,7 +75,8 @@ export async function sendPushToUsers(params: SendPushParams): Promise<{
   }
 
   const supabase = createAdminClient();
-  const allowedUserIds = await getNotificationPrefs(supabase, userIds, orgId, kind);
+  const resolvedKind = kind ?? 'alert';
+  const allowedUserIds = await getNotificationPrefs(supabase, userIds, orgId, resolvedKind);
   if (allowedUserIds.size === 0) {
     return { sent: 0, targets: userIds.length };
   }
@@ -94,15 +95,21 @@ export async function sendPushToUsers(params: SendPushParams): Promise<{
   }
 
   try {
+    const resolvedUrl = url ?? '/notifications';
+    const resolvedKind = kind ?? 'alert';
+    const payloadData: Record<string, string> = {
+      url: resolvedUrl,
+      kind: resolvedKind,
+      ...(data ?? {}),
+    };
     const bodyJson: Record<string, unknown> = {
       app_id: appId,
       include_subscription_ids: playerIds.slice(0, 2000),
       headings: { en: title },
       contents: { en: body },
       target_channel: 'push',
+      data: payloadData,
     };
-    if (url) bodyJson.url = url;
-    if (data && Object.keys(data).length > 0) bodyJson.data = data;
 
     const res = await fetch(ONESIGNAL_API, {
       method: 'POST',

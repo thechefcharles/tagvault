@@ -136,7 +136,7 @@ export async function POST(request: NextRequest) {
               userIds: [user_id],
               title: 'Your TagVault Digest',
               body: 'Your saved items digest is ready',
-              url: '/notifications',
+              url: '/notifications?tab=digest',
               kind: 'digest',
             });
           }

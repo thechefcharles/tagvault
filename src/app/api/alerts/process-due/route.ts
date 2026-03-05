@@ -123,8 +123,8 @@ export async function POST(request: Request) {
               userIds: [runAsUserId],
               title: 'TagVault Alert',
               body: 'New matches found',
-              url: '/notifications',
-              kind: 'alerts',
+              url: '/notifications?tab=alerts',
+              kind: 'alert',
             });
           }
 
