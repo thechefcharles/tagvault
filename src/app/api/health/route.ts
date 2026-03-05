@@ -7,7 +7,9 @@ export const dynamic = 'force-dynamic';
 export async function GET() {
   const start = Date.now();
   const version =
-    process.env.SENTRY_RELEASE ?? process.env.VERCEL_GIT_COMMIT_SHA ?? undefined;
+    process.env.SENTRY_RELEASE ??
+    process.env.VERCEL_GIT_COMMIT_SHA ??
+    'dev';
 
   const checks: {
     db: { ok: boolean; error?: string };
@@ -42,7 +44,7 @@ export async function GET() {
   const body = {
     ok: checks.db.ok,
     time: new Date().toISOString(),
-    version: version ?? null,
+    version,
     checks: {
       db: checks.db,
       redis: checks.redis,

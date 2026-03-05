@@ -34,6 +34,14 @@ export default async function AdminIndexPage() {
               Users
             </Link>
           </li>
+          <li>
+            <Link
+              href="/admin/mobile"
+              className="text-blue-600 hover:underline dark:text-blue-400"
+            >
+              Mobile (TestFlight sanity)
+            </Link>
+          </li>
         </ul>
       </main>
     </div>
