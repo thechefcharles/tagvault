@@ -11,19 +11,45 @@ private let log = OSLog(subsystem: "com.tagvault.app.ShareExtension", category: 
 
 class ShareViewController: UIViewController {
 
+    private var statusLabel: UILabel!
+    private var openButton: UIButton!
+
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .systemBackground
-        let label = UILabel()
-        label.text = "Saving to TagVault…"
-        label.textColor = .label
-        label.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(label)
+        statusLabel = UILabel()
+        statusLabel.text = "Saving to TagVault…"
+        statusLabel.textColor = .label
+        statusLabel.textAlignment = .center
+        statusLabel.numberOfLines = 0
+        statusLabel.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(statusLabel)
+
+        openButton = UIButton(type: .system)
+        openButton.setTitle("Open TagVault", for: .normal)
+        openButton.titleLabel?.font = .systemFont(ofSize: 17, weight: .semibold)
+        openButton.isHidden = true
+        openButton.addTarget(self, action: #selector(openTapped), for: .touchUpInside)
+        openButton.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(openButton)
+
         NSLayoutConstraint.activate([
-            label.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            label.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+            statusLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            statusLabel.centerYAnchor.constraint(equalTo: view.centerYAnchor, constant: -24),
+            statusLabel.leadingAnchor.constraint(greaterThanOrEqualTo: view.leadingAnchor, constant: 24),
+            statusLabel.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -24),
+            openButton.topAnchor.constraint(equalTo: statusLabel.bottomAnchor, constant: 20),
+            openButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
         ])
         handleShare()
+    }
+
+    @objc private func openTapped() {
+        Task {
+            let opened = await openMainApp()
+            os_log(.info, log: log, "openMainApp (user tap) result=%{public}@", opened ? "true" : "false")
+            await MainActor.run { finishWithoutPayload() }
+        }
     }
 
     private func handleShare() {
@@ -38,13 +64,14 @@ class ShareViewController: UIViewController {
             if let payload = await extractPayload(from: attachments) {
                 os_log(.info, log: log, "Extracted payload kind=%{public}@", payload["kind"] as? String ?? "?")
                 await storePayload(payload)
-                let opened = await openMainApp()
-                os_log(.info, log: log, "openMainApp result=%{public}@", opened ? "true" : "false")
-                try? await Task.sleep(nanoseconds: 800_000_000)
+                await MainActor.run {
+                    statusLabel.text = "Saved!\nTap to open TagVault."
+                    openButton.isHidden = false
+                }
             } else {
                 os_log(.info, log: log, "No payload extracted from attachments")
+                await MainActor.run { finishWithoutPayload() }
             }
-            finishWithoutPayload()
         }
     }
 
