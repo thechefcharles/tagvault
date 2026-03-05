@@ -36,7 +36,8 @@ export function CapacitorLinkHandler() {
         if (
           path.startsWith('/auth/callback') ||
           path.startsWith('/onboarding') ||
-          path.startsWith('/app')
+          path.startsWith('/app') ||
+          path.startsWith('/share-import')
         ) {
           router.push(path);
         }

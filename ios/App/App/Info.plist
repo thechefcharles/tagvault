@@ -45,5 +45,20 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLIdentifier</key>
+			<string>com.tagvault.app</string>
+			<key>CFBundleURLName</key>
+			<string>TagVault</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>tagvault</string>
+			</array>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+		</dict>
+	</array>
 </dict>
 </plist>

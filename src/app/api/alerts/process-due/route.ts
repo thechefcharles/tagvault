@@ -2,6 +2,7 @@ import * as Sentry from '@sentry/nextjs';
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { runAlertQuery, type AlertRow } from '@/lib/alerts/run-alert-query';
+import { sendPushToUsers } from '@/lib/server/push/onesignal';
 import { withCronLock } from '@/lib/server/cronLock';
 import {
   recordCronStarted,
@@ -117,6 +118,14 @@ export async function POST(request: Request) {
               meta,
             });
             totalNotified += 1;
+            void sendPushToUsers({
+              orgId,
+              userIds: [runAsUserId],
+              title: 'TagVault Alert',
+              body: 'New matches found',
+              url: '/notifications?tab=alerts',
+              kind: 'alert',
+            });
           }
 
           const maxMatchAt =
