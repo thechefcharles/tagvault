@@ -1,5 +1,5 @@
 /**
- * SharePayloadPlugin - Capacitor plugin for reading/clearing pending share payload
+ * SharePayloadPlugin - Capacitor plugin for reading/clearing pending share payload queue
  * from iOS App Group UserDefaults or Android SharedPreferences.
  * Used by the share-import page after the app is opened from a system share sheet.
  */
@@ -15,10 +15,10 @@ export interface PendingSharePayload {
 }
 
 export interface SharePayloadPluginInterface {
-  /** Read pending share payload if any; returns null when none. */
-  getPendingPayload(): Promise<{ payload: PendingSharePayload | null }>;
-  /** Clear the pending payload after consuming. */
-  clearPendingPayload(): Promise<void>;
+  /** Read pending share payload queue (newest last). Empty array when none. */
+  getPendingPayload(): Promise<{ payloads: PendingSharePayload[] }>;
+  /** Remove one item at index, or clear entire queue if index not provided. */
+  clearPendingPayload(options?: { index?: number }): Promise<void>;
 }
 
 const SharePayloadPlugin = registerPlugin<SharePayloadPluginInterface>('SharePayload');

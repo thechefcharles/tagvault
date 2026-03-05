@@ -18,7 +18,8 @@ import org.json.JSONObject
 object ShareIntentHandler {
     private const val TAG = "ShareIntentHandler"
     private const val PREFS_NAME = "share_payload_prefs"
-    private const val PAYLOAD_KEY = "pending_share_payload_v1"
+    private const val QUEUE_KEY = "pending_share_payload_queue_v1"
+    private const val LEGACY_KEY = "pending_share_payload_v1"
     private const val MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024
 
     fun handleIntent(context: Context, intent: Intent?): Boolean {
@@ -34,7 +35,20 @@ object ShareIntentHandler {
 
         try {
             val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            prefs.edit().putString(PAYLOAD_KEY, payload.toString()).apply()
+            var queueJson = prefs.getString(QUEUE_KEY, null)
+            if (queueJson == null) {
+                val legacy = prefs.getString(LEGACY_KEY, null)
+                queueJson = if (legacy != null) {
+                    org.json.JSONArray().put(JSONObject(legacy)).put(payload).toString()
+                } else {
+                    org.json.JSONArray().put(payload).toString()
+                }
+                prefs.edit().putString(QUEUE_KEY, queueJson).remove(LEGACY_KEY).apply()
+            } else {
+                val arr = org.json.JSONArray(queueJson)
+                arr.put(payload)
+                prefs.edit().putString(QUEUE_KEY, arr.toString()).apply()
+            }
             return true
         } catch (e: Exception) {
             Log.e(TAG, "Failed to store share payload", e)
