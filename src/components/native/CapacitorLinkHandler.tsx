@@ -41,7 +41,8 @@ export function CapacitorLinkHandler() {
       };
 
       App.getLaunchUrl()
-        .then(({ url }) => {
+        .then((result) => {
+          const url = result?.url;
           if (url) {
             const path = getPathFromUrl(url);
             if (path) navigate(path);
