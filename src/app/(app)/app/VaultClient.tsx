@@ -14,6 +14,7 @@ export function VaultClient({
   sort,
   limit,
   tagIds,
+  inbox,
 }: {
   items: ItemWithTags[];
   nextCursor: string | null;
@@ -21,6 +22,7 @@ export function VaultClient({
   sort?: string;
   limit?: number;
   tagIds?: string[];
+  inbox?: boolean;
 }) {
   const [modalOpen, setModalOpen] = useState(false);
   const [alertModalOpen, setAlertModalOpen] = useState(false);
@@ -49,6 +51,7 @@ export function VaultClient({
       if (type && type !== 'all') params.set('type', type);
       if (sort) params.set('sort', sort);
       if (tagIds?.length) params.set('tag_ids', tagIds.join(','));
+      if (typeof inbox === 'boolean') params.set('inbox', inbox ? '1' : '0');
       const res = await fetch(`/api/items?${params}`);
       const data = await res.json();
       if (res.ok && data.items) {
@@ -62,12 +65,12 @@ export function VaultClient({
 
   return (
     <>
-      <div className="mb-4 flex justify-end gap-2">
+      <div className="mb-4 flex flex-wrap justify-end gap-2">
         {tagIds?.length ? (
           <button
             type="button"
             onClick={() => setAlertModalOpen(true)}
-            className="rounded-md border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-100 dark:border-neutral-600 dark:hover:bg-neutral-800"
+            className="min-h-[44px] touch-manipulation rounded-xl border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-100 dark:border-neutral-600 dark:hover:bg-neutral-800"
           >
             Create alert for these tags
           </button>
@@ -75,7 +78,7 @@ export function VaultClient({
         <button
           type="button"
           onClick={() => setModalOpen(true)}
-          className="rounded-md bg-neutral-900 px-4 py-2 text-white hover:bg-neutral-800 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-neutral-200"
+          className="min-h-[44px] touch-manipulation rounded-xl bg-neutral-900 px-4 py-2 text-white hover:bg-neutral-800 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-neutral-200"
         >
           Quick Add
         </button>

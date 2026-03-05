@@ -47,13 +47,24 @@ export async function POST(request: Request) {
     const priority = priorityRaw
       ? Math.min(20, Math.max(1, parseInt(String(priorityRaw), 10)))
       : null;
+    const source = (formData.get('source') as string | null) ?? null;
+    const inboxFlagRaw = formData.get('inbox') as string | null;
+    const inbox = source === 'share_import' && (inboxFlagRaw === '1' || inboxFlagRaw === 'true');
 
-    if (!file || !description?.trim()) {
-      return NextResponse.json({ error: 'file and description are required' }, { status: 400 });
+    if (!file) {
+      return NextResponse.json({ error: 'file is required' }, { status: 400 });
     }
 
-    if (description.length < 12 || description.length > 500) {
-      return NextResponse.json({ error: 'description must be 12–500 characters' }, { status: 400 });
+    const desc = description?.trim() ?? '';
+    if (!inbox) {
+      if (!desc) {
+        return NextResponse.json({ error: 'file and description are required' }, { status: 400 });
+      }
+      if (desc.length < 12 || desc.length > 500) {
+        return NextResponse.json({ error: 'description must be 12–500 characters' }, { status: 400 });
+      }
+    } else if (desc.length > 500) {
+      return NextResponse.json({ error: 'description must be 0–500 characters' }, { status: 400 });
     }
 
     if (file.size > MAX_FILE_SIZE) {
@@ -77,9 +88,10 @@ export async function POST(request: Request) {
       userId: user.id,
       payload: {
         type: 'file',
-        description: description.trim(),
+        description: desc,
         title: title?.trim() || null,
         priority,
+        inbox,
       },
     });
 

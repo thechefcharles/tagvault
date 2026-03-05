@@ -8,6 +8,7 @@ import { ManageTags } from '@/components/ManageTags';
 import { AddToCollection } from '@/components/AddToCollection';
 import { ItemShareSection } from '@/components/share/ItemShareSection';
 import { TagChips } from '@/components/TagChips';
+import { Button } from '@/components/ui/Button';
 import type { Item } from '@/types/item';
 
 type ItemWithTags = Item & { tags?: { id: string; name: string; slug: string }[] };
@@ -22,6 +23,7 @@ export function ItemDetailClient({ item }: { item: ItemWithTags }) {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [movingOut, setMovingOut] = useState(false);
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
@@ -53,6 +55,34 @@ export function ItemDetailClient({ item }: { item: ItemWithTags }) {
     router.refresh();
   }
 
+  async function handleMoveOutOfInbox() {
+    setError(null);
+    setMovingOut(true);
+    try {
+      const res = await fetch(`/api/items/${item.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          description: description.trim(),
+          inbox: false,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || 'Failed to move to Vault');
+        if (data.details?.fieldErrors?.description?.length) {
+          // Focus description if validation failed
+          const textarea = document.querySelector<HTMLTextAreaElement>('textarea');
+          textarea?.focus();
+        }
+        return;
+      }
+      router.refresh();
+    } finally {
+      setMovingOut(false);
+    }
+  }
+
   async function handleDelete() {
     setDeleting(true);
     setError(null);
@@ -71,16 +101,17 @@ export function ItemDetailClient({ item }: { item: ItemWithTags }) {
   }
 
   return (
-    <div className="space-y-6">
-      {item.type === 'link' && item.url && (
-        <button
-          type="button"
-          onClick={() => openExternal(item.url!)}
-          className="inline-block rounded-md bg-neutral-900 px-4 py-2 text-white hover:bg-neutral-800 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-neutral-200"
-        >
-          Open link
-        </button>
-      )}
+    <div className="min-h-screen overflow-y-auto pb-safe">
+      <div className="space-y-6 safe-area-bottom">
+        {item.type === 'link' && item.url && (
+          <Button
+            type="button"
+            variant="primary"
+            onClick={() => openExternal(item.url!)}
+          >
+            Open link
+          </Button>
+        )}
 
       {item.type === 'file' && item.storage_path && <DownloadFileButton itemId={item.id} />}
 
@@ -146,21 +177,27 @@ export function ItemDetailClient({ item }: { item: ItemWithTags }) {
 
         {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
 
-        <div className="flex gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
           <button
             type="submit"
             disabled={saving || description.length < 12}
-            className="rounded-md bg-neutral-900 px-4 py-2 text-white hover:bg-neutral-800 disabled:opacity-50 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-neutral-200"
+            className="min-h-[44px] touch-manipulation rounded-md bg-neutral-900 px-4 py-2 text-white hover:bg-neutral-800 disabled:opacity-50 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-neutral-200"
           >
             {saving ? 'Saving…' : 'Save'}
           </button>
-          <button
-            type="button"
-            onClick={() => setShowDeleteConfirm(true)}
-            className="rounded-md border border-red-300 px-4 py-2 text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/20"
-          >
+          {item.inbox && (
+            <Button
+              type="button"
+              variant="success"
+              onClick={handleMoveOutOfInbox}
+              disabled={movingOut || description.trim().length < 12}
+            >
+              {movingOut ? 'Moving…' : 'Move to Vault'}
+            </Button>
+          )}
+          <Button type="button" variant="danger" onClick={() => setShowDeleteConfirm(true)}>
             Delete
-          </button>
+          </Button>
         </div>
       </form>
 
@@ -168,20 +205,20 @@ export function ItemDetailClient({ item }: { item: ItemWithTags }) {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-sm rounded-lg border bg-white p-6 dark:border-neutral-700 dark:bg-neutral-900">
             <p className="mb-4">Are you sure you want to delete this item?</p>
-            <div className="flex gap-2">
-              <button
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Button
                 type="button"
+                variant="secondary"
                 onClick={() => setShowDeleteConfirm(false)}
                 disabled={deleting}
-                className="rounded-md border px-4 py-2"
               >
                 Cancel
-              </button>
+              </Button>
               <button
                 type="button"
                 onClick={handleDelete}
                 disabled={deleting}
-                className="rounded-md bg-red-600 px-4 py-2 text-white hover:bg-red-700 disabled:opacity-50"
+                className="min-h-[44px] touch-manipulation rounded-md bg-red-600 px-4 py-2 text-white hover:bg-red-700 disabled:opacity-50"
               >
                 {deleting ? 'Deleting…' : 'Delete'}
               </button>
@@ -189,6 +226,7 @@ export function ItemDetailClient({ item }: { item: ItemWithTags }) {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

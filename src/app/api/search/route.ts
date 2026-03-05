@@ -29,6 +29,15 @@ export async function GET(request: Request) {
     const cursorRaw = searchParams.get('cursor');
     const offset = cursorRaw ? Math.max(0, parseInt(cursorRaw, 10) || 0) : 0;
     const semantic = searchParams.get('semantic') !== 'false';
+    const inboxParam = searchParams.get('inbox');
+    const inbox =
+      inboxParam === null
+        ? undefined
+        : inboxParam === '1'
+          ? true
+          : inboxParam === '0'
+            ? false
+            : undefined;
     let queryEmbedding: number[] | null = null;
 
     if (q.trim()) {
@@ -47,7 +56,7 @@ export async function GET(request: Request) {
     }
 
     const fetchLimit = limit + 1;
-    const items = await searchItemsHybrid({
+    let items = await searchItemsHybrid({
       orgId: activeOrgId,
       userId: user.id,
       q,
@@ -59,6 +68,10 @@ export async function GET(request: Request) {
       queryEmbedding,
       tagIds,
     });
+
+    if (typeof inbox === 'boolean') {
+      items = items.filter((item) => item.inbox === inbox);
+    }
 
     const hasMore = items.length > limit;
     const page = hasMore ? items.slice(0, limit) : items;

@@ -41,7 +41,8 @@ export function AddToCollection({ itemId }: { itemId: string }) {
           e.target.value = '';
         }}
         disabled={!!adding}
-        className="rounded border border-neutral-300 px-2 py-1.5 text-sm dark:border-neutral-600 dark:bg-neutral-800"
+        className="min-h-[44px] touch-manipulation rounded border border-neutral-300 px-3 py-2.5 text-sm dark:border-neutral-600 dark:bg-neutral-800"
+        aria-label="Add to collection"
       >
         <option value="">Choose collection…</option>
         {collections.map((c) => (
