@@ -2,29 +2,47 @@ import UIKit
 import Social
 import UniformTypeIdentifiers
 import MobileCoreServices
+import os.log
 
 private let appGroupId = "group.com.tagvault.app"
 private let payloadKey = "pending_share_payload_v1"
 private let openUrl = "tagvault://share-import"
+private let log = OSLog(subsystem: "com.tagvault.app.ShareExtension", category: "Share")
 
 class ShareViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
+        view.backgroundColor = .systemBackground
+        let label = UILabel()
+        label.text = "Saving to TagVault…"
+        label.textColor = .label
+        label.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(label)
+        NSLayoutConstraint.activate([
+            label.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            label.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+        ])
         handleShare()
     }
 
     private func handleShare() {
         guard let extensionItem = extensionContext?.inputItems.first as? NSExtensionItem,
               let attachments = extensionItem.attachments else {
+            os_log(.info, log: log, "No input items or attachments")
             finishWithoutPayload()
             return
         }
 
         Task {
             if let payload = await extractPayload(from: attachments) {
+                os_log(.info, log: log, "Extracted payload kind=%{public}@", payload["kind"] as? String ?? "?")
                 await storePayload(payload)
-                await openMainApp()
+                let opened = await openMainApp()
+                os_log(.info, log: log, "openMainApp result=%{public}@", opened ? "true" : "false")
+                try? await Task.sleep(nanoseconds: 800_000_000)
+            } else {
+                os_log(.info, log: log, "No payload extracted from attachments")
             }
             finishWithoutPayload()
         }
@@ -94,18 +112,20 @@ class ShareViewController: UIViewController {
         ud.synchronize()
     }
 
-    private func openMainApp() async {
-        guard let url = URL(string: openUrl) else { return }
+    private func openMainApp() async -> Bool {
+        guard let url = URL(string: openUrl) else { return false }
         let selector = sel_registerName("openURL:")
         var responder: UIResponder? = self
         while let r = responder {
             if r.responds(to: selector) {
                 r.perform(selector, with: url)
-                break
+                os_log(.info, log: log, "openURL performed on responder")
+                return true
             }
             responder = r.next
         }
-        try? await Task.sleep(nanoseconds: 500_000_000)
+        os_log(.error, log: log, "No responder for openURL: - main app may not open")
+        return false
     }
 
     private func finishWithoutPayload() {

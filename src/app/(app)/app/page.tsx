@@ -59,6 +59,9 @@ export default async function AppPage({
         </div>
       </header>
       <nav className="mx-auto mt-2 flex max-w-2xl flex-wrap gap-3 text-sm text-neutral-500 dark:text-neutral-400">
+        <Link href="/share-import" className="hover:text-foreground">
+          Share Import
+        </Link>
         <Link href="/search" className="hover:text-foreground">
           Search
         </Link>
