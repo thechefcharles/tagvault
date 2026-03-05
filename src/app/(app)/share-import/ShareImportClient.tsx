@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import { SharePayloadPlugin } from '@/lib/native/SharePayloadPlugin';
 import { isCapacitor } from '@/lib/native/capacitor';
 import { getErrorMessage } from '@/lib/api/parse-error';
+import { Skeleton } from '@/components/ui/Skeleton';
 import type { PendingSharePayload } from '@/lib/native/SharePayloadPlugin';
 
 function getPlatformTag(): string {
@@ -39,6 +40,7 @@ export function ShareImportClient() {
   const router = useRouter();
   const descriptionRef = useRef<HTMLTextAreaElement>(null);
   const [payloads, setPayloads] = useState<PendingSharePayload[] | 'loading' | 'none'>('loading');
+  const [savedItemId, setSavedItemId] = useState<string | null>(null);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState('');
@@ -75,13 +77,15 @@ export function ShareImportClient() {
     }
   }, [payloads]);
 
+  const payloadsKey =
+    payloads === 'loading' ? 'loading' : payloads === 'none' ? 'none' : payloads.length;
   useEffect(() => {
     if (payloads !== 'loading' && payloads !== 'none' && payloads.length > 0) {
       const { title: t, description: d } = fillFormFromPayload(payloads[0]);
       setTitle(t);
       setDescription(d);
     }
-  }, [payloads === 'loading' ? 0 : payloads === 'none' ? 0 : payloads.length]);
+  }, [payloadsKey, payloads]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -92,12 +96,6 @@ export function ShareImportClient() {
 
     try {
       const desc = description.trim();
-      if (desc.length < 12 || desc.length > 500) {
-        setError('Description must be 12–500 characters');
-        setLoading(false);
-        return;
-      }
-
       const prio = priority ? Math.min(20, Math.max(1, parseInt(priority, 10))) : null;
 
       if (payloadData.kind === 'file' && payloadData.fileBase64) {
@@ -106,6 +104,8 @@ export function ShareImportClient() {
         const blob = new Blob([bytes], { type: payloadData.mimeType || 'application/octet-stream' });
         formData.set('file', new File([blob], payloadData.fileName || 'shared_file'));
         formData.set('description', desc);
+        formData.set('source', 'share_import');
+        formData.set('inbox', '1');
         if (title.trim()) formData.set('title', title.trim());
         if (prio) formData.set('priority', String(prio));
 
@@ -117,12 +117,15 @@ export function ShareImportClient() {
           setLoading(false);
           return;
         }
+        setSavedItemId(data.id);
+        setPayloads('loading');
       } else {
         const body: Record<string, unknown> = {
           type: payloadData.kind === 'url' ? 'link' : 'note',
           description: desc,
           title: title.trim() || null,
           priority: prio,
+          inbox: true,
         };
         if (payloadData.kind === 'url' && payloadData.url) body.url = payloadData.url;
 
@@ -142,12 +145,13 @@ export function ShareImportClient() {
           setLoading(false);
           return;
         }
+        setSavedItemId(data.id);
+        setPayloads('loading');
       }
 
       await SharePayloadPlugin.clearPendingPayload({ index: 0 });
       setLoading(false);
-      setPayloads('loading');
-      fetchPayloads();
+      // Show success screen; fetchPayloads() when user leaves (Back to Vault / View Item)
     } catch (err) {
       Sentry.captureException(err, {
         tags: { area: 'share_import', platform: getPlatformTag(), kind: payloadData.kind },
@@ -164,10 +168,54 @@ export function ShareImportClient() {
     fetchPayloads();
   }
 
+  if (savedItemId) {
+    return (
+      <div className="rounded-xl border border-neutral-200 bg-white p-6 dark:border-neutral-700 dark:bg-neutral-900">
+        <p className="mb-6 flex items-center gap-2 text-lg font-semibold text-emerald-600 dark:text-emerald-400">
+          <span className="text-2xl" aria-hidden>✓</span>
+          Saved to Inbox
+        </p>
+        <div className="flex flex-col gap-3">
+          <Link
+            href={`/app/item/${savedItemId}`}
+            onClick={() => { setSavedItemId(null); fetchPayloads(); }}
+            className="flex min-h-[44px] touch-manipulation items-center justify-center rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-3 font-medium transition hover:bg-neutral-100 dark:border-neutral-700 dark:bg-neutral-800 dark:hover:bg-neutral-700"
+          >
+            View Item
+          </Link>
+          <Link
+            href={`/app/item/${savedItemId}`}
+            onClick={() => { setSavedItemId(null); fetchPayloads(); }}
+            className="flex min-h-[44px] touch-manipulation items-center justify-center rounded-xl border border-neutral-200 px-4 py-3 font-medium transition hover:bg-neutral-50 dark:border-neutral-700 dark:hover:bg-neutral-800"
+          >
+            Add Tags
+          </Link>
+          <Link
+            href={`/app/item/${savedItemId}`}
+            onClick={() => { setSavedItemId(null); fetchPayloads(); }}
+            className="flex min-h-[44px] touch-manipulation items-center justify-center rounded-xl border border-neutral-200 px-4 py-3 font-medium transition hover:bg-neutral-50 dark:border-neutral-700 dark:hover:bg-neutral-800"
+          >
+            Move to Collection
+          </Link>
+          <Link
+            href="/app"
+            onClick={() => { setSavedItemId(null); fetchPayloads(); }}
+            className="flex min-h-[44px] touch-manipulation items-center justify-center rounded-xl border border-neutral-200 px-4 py-3 font-medium transition hover:bg-neutral-50 dark:border-neutral-700 dark:hover:bg-neutral-800"
+          >
+            Back to Vault
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   if (payloads === 'loading') {
     return (
-      <div className="rounded-lg border border-neutral-200 bg-white p-6 dark:border-neutral-700 dark:bg-neutral-900">
-        <p className="text-neutral-500 dark:text-neutral-400">Loading shared content…</p>
+      <div className="rounded-xl border border-neutral-200 bg-white p-6 dark:border-neutral-700 dark:bg-neutral-900">
+        <Skeleton className="mb-4 h-6 w-48" />
+        <Skeleton className="mb-2 h-4 w-full" />
+        <Skeleton className="mb-4 h-20 w-full" />
+        <Skeleton className="h-12 w-24" />
       </div>
     );
   }
@@ -231,16 +279,14 @@ export function ShareImportClient() {
           />
         </div>
         <div>
-          <label className="mb-1 block text-sm font-medium">Description * (min 12 chars)</label>
+          <label className="mb-1 block text-sm font-medium">Description (optional)</label>
           <textarea
             ref={descriptionRef}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            required
-            minLength={12}
             maxLength={500}
             rows={4}
-            placeholder="What is this and why did you save it?"
+            placeholder="Optionally add context for why you saved this."
             className="w-full rounded-md border border-neutral-300 px-3 py-2 dark:border-neutral-600 dark:bg-neutral-800"
           />
         </div>
@@ -265,25 +311,25 @@ export function ShareImportClient() {
             )}
           </div>
         )}
-        <div className="flex flex-wrap gap-2 pt-2">
+        <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:flex-wrap sm:gap-2">
           <button
             type="button"
             onClick={() => router.push('/app')}
-            className="rounded-md border border-neutral-300 px-4 py-2 dark:border-neutral-600"
+            className="min-h-[44px] touch-manipulation rounded-md border border-neutral-300 px-4 py-2 dark:border-neutral-600"
           >
             Cancel
           </button>
           <button
             type="button"
             onClick={handleDiscard}
-            className="rounded-md border border-neutral-300 px-4 py-2 dark:border-neutral-600"
+            className="min-h-[44px] touch-manipulation rounded-md border border-neutral-300 px-4 py-2 dark:border-neutral-600"
           >
             Discard
           </button>
           <button
             type="submit"
             disabled={loading}
-            className="rounded-md bg-neutral-900 px-4 py-2 text-white hover:bg-neutral-800 disabled:opacity-50 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-neutral-200"
+            className="min-h-[44px] touch-manipulation rounded-md bg-neutral-900 px-4 py-2 text-white hover:bg-neutral-800 disabled:opacity-50 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-neutral-200"
           >
             {loading ? 'Saving…' : 'Save to Vault'}
           </button>

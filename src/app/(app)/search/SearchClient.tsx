@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { getErrorMessage } from '@/lib/api/parse-error';
 import { SavedSearchModal } from '@/components/saved-searches/SavedSearchModal';
 import { AlertModal } from '@/components/alerts/AlertModal';
+import { SearchBar } from '@/components/search/SearchBar';
+import { Skeleton } from '@/components/ui/Skeleton';
 import type { Item } from '@/types/item';
 
 const DEBOUNCE_MS = 350;
@@ -98,14 +100,14 @@ export function SearchClient() {
 
   return (
     <div className="space-y-4">
+      <SearchBar
+        value={query}
+        onChange={setQuery}
+        onClear={() => setQuery('')}
+        placeholder="Search items…"
+        autoFocus
+      />
       <div className="flex flex-wrap items-center gap-2">
-        <input
-          type="search"
-          placeholder="Search items…"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          className="min-w-[200px] flex-1 rounded-md border border-neutral-300 px-3 py-2 dark:border-neutral-600 dark:bg-neutral-800"
-        />
         {tags.length > 0 && (
           <div className="flex flex-wrap items-center gap-1">
             <span className="text-sm text-neutral-500">Tags:</span>
@@ -120,7 +122,7 @@ export function SearchClient() {
                       active ? prev.filter((id) => id !== t.id) : [...prev, t.id],
                     )
                   }
-                  className={`rounded px-2 py-0.5 text-xs ${
+                  className={`min-h-[44px] min-w-[44px] touch-manipulation rounded px-3 py-2 text-xs sm:min-h-0 sm:min-w-0 sm:px-2 sm:py-0.5 ${
                     active
                       ? 'bg-neutral-900 text-white dark:bg-neutral-100 dark:text-neutral-900'
                       : 'bg-neutral-200 hover:bg-neutral-300 dark:bg-neutral-700 dark:hover:bg-neutral-600'
@@ -132,18 +134,19 @@ export function SearchClient() {
             })}
           </div>
         )}
-        <label className="flex items-center gap-2 text-sm">
+        <label className="flex min-h-[44px] touch-manipulation items-center gap-2 text-sm">
           <input
             type="checkbox"
             checked={semantic}
             onChange={(e) => setSemantic(e.target.checked)}
+            className="h-4 w-4"
           />
           Semantic boost
         </label>
         <button
           type="button"
           onClick={() => setSaveModalOpen(true)}
-          className="rounded-md border border-neutral-300 px-3 py-2 text-sm hover:bg-neutral-100 dark:border-neutral-600 dark:hover:bg-neutral-800"
+          className="min-h-[44px] touch-manipulation rounded-xl border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-100 dark:border-neutral-600 dark:hover:bg-neutral-800"
         >
           Save this search
         </button>
@@ -151,18 +154,9 @@ export function SearchClient() {
           <button
             type="button"
             onClick={() => setAlertModalOpen(true)}
-            className="rounded-md border border-neutral-300 px-3 py-2 text-sm hover:bg-neutral-100 dark:border-neutral-600 dark:hover:bg-neutral-800"
+            className="min-h-[44px] touch-manipulation rounded-xl border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-100 dark:border-neutral-600 dark:hover:bg-neutral-800"
           >
             Create alert for these tags
-          </button>
-        )}
-        {query && (
-          <button
-            type="button"
-            onClick={() => setQuery('')}
-            className="rounded-md border border-neutral-300 px-3 py-2 text-sm hover:bg-neutral-100 dark:border-neutral-600 dark:hover:bg-neutral-800"
-          >
-            Clear
           </button>
         )}
       </div>
@@ -207,7 +201,11 @@ export function SearchClient() {
         </div>
       )}
       {loading && items.length === 0 ? (
-        <p className="py-8 text-neutral-500">Loading…</p>
+        <div className="space-y-3 py-4">
+          <Skeleton className="h-16 w-full rounded-xl" />
+          <Skeleton className="h-16 w-full rounded-xl" />
+          <Skeleton className="h-16 w-full rounded-xl" />
+        </div>
       ) : items.length === 0 ? (
         <p className="py-8 text-neutral-500">
           {q.length > 0 && q.length < MIN_QUERY_LEN
@@ -220,7 +218,7 @@ export function SearchClient() {
             <li key={item.id} className="py-3">
               <Link
                 href={`/app/item/${item.id}`}
-                className="-mx-2 block rounded px-2 py-1 hover:bg-neutral-50 dark:hover:bg-neutral-800/50"
+                className="-mx-2 block min-h-[44px] rounded-lg px-2 py-2 hover:bg-neutral-50 dark:hover:bg-neutral-800/50"
               >
                 <span className="mr-2 inline-block rounded bg-neutral-200 px-1.5 py-0.5 text-xs font-medium capitalize dark:bg-neutral-700">
                   {item.type}
@@ -244,7 +242,7 @@ export function SearchClient() {
             type="button"
             onClick={() => search(nextCursor, true)}
             disabled={loading}
-            className="rounded-md border border-neutral-300 px-3 py-2 text-sm hover:bg-neutral-100 disabled:opacity-50 dark:border-neutral-600 dark:hover:bg-neutral-800"
+            className="min-h-[44px] touch-manipulation rounded-xl border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-100 disabled:opacity-50 dark:border-neutral-600 dark:hover:bg-neutral-800"
           >
             {loading ? 'Loading…' : 'Load more'}
           </button>

@@ -23,6 +23,15 @@ export async function GET(request: Request) {
       : undefined;
     const limitParam = searchParams.get('limit');
     const limit = limitParam ? Math.min(100, Math.max(1, parseInt(limitParam, 10))) : 25;
+    const inboxParam = searchParams.get('inbox');
+    const inbox =
+      inboxParam === null
+        ? undefined
+        : inboxParam === '1'
+          ? true
+          : inboxParam === '0'
+            ? false
+            : undefined;
 
     const { items, nextCursor } = await listItems({
       orgId: activeOrgId,
@@ -32,6 +41,7 @@ export async function GET(request: Request) {
       limit,
       cursor,
       tagIds,
+      inbox,
     });
     const res = NextResponse.json({ items, nextCursor });
     logApi({

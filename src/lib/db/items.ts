@@ -12,6 +12,7 @@ export async function listItems({
   limit = 25,
   cursor,
   tagIds,
+  inbox,
 }: {
   orgId: string;
   userId: string;
@@ -20,6 +21,7 @@ export async function listItems({
   limit?: number;
   cursor?: string;
   tagIds?: string[];
+  inbox?: boolean;
 }): Promise<{ items: Item[]; nextCursor: string | null }> {
   const supabase = await createClient();
   const safeLimit = Math.min(Math.max(1, limit), 100);
@@ -34,6 +36,10 @@ export async function listItems({
     .limit(safeLimit + 1);
 
   if (type) query = query.eq('type', type);
+
+  if (typeof inbox === 'boolean') {
+    query = query.eq('inbox', inbox);
+  }
 
   if (tagIds?.length) {
     const { data: itemIds } = await supabase
@@ -149,6 +155,7 @@ export async function createItem({
       description: payload.description,
       priority: payload.priority ?? null,
       url: payload.type === 'link' ? (payload.url ?? null) : null,
+      inbox: payload.inbox === true,
     })
     .select()
     .single();
@@ -172,6 +179,7 @@ export async function updateItem({
   if (payload.description !== undefined) update.description = payload.description;
   if (payload.priority !== undefined) update.priority = payload.priority;
   if (payload.url !== undefined) update.url = payload.url;
+  if (payload.inbox !== undefined) update.inbox = payload.inbox;
 
   const { data, error } = await supabase
     .from('items')

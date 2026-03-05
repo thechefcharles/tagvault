@@ -13,7 +13,14 @@ export const dynamic = 'force-dynamic';
 export default async function AppPage({
   searchParams,
 }: {
-  searchParams: Promise<{ type?: string; sort?: string; cursor?: string; limit?: string; tag_ids?: string }>;
+  searchParams: Promise<{
+    type?: string;
+    sort?: string;
+    cursor?: string;
+    limit?: string;
+    tag_ids?: string;
+    inbox?: string;
+  }>;
 }) {
   const { user, activeOrgId } = await requireActiveOrg();
   const supabase = await createClient();
@@ -36,6 +43,15 @@ export default async function AppPage({
   const cursor = params.cursor;
   const limit = params.limit ? Math.min(100, Math.max(1, parseInt(params.limit, 10))) : 25;
   const tagIds = params.tag_ids ? params.tag_ids.split(',').map((s) => s.trim()).filter(Boolean) : undefined;
+  const inboxParam = params.inbox;
+  const inbox =
+    inboxParam === undefined
+      ? undefined
+      : inboxParam === '1'
+        ? true
+        : inboxParam === '0'
+          ? false
+          : undefined;
 
   const { items, nextCursor } = await listItems({
     orgId: activeOrgId,
@@ -45,10 +61,11 @@ export default async function AppPage({
     limit,
     cursor,
     tagIds,
+    inbox,
   });
 
   return (
-    <div className="min-h-screen p-6">
+    <div className="min-h-screen p-4 pb-safe sm:p-6">
       <header className="mx-auto flex max-w-2xl items-center justify-between">
         <h1 className="text-xl font-semibold">Vault</h1>
         <div className="flex items-center gap-2">
@@ -87,8 +104,16 @@ export default async function AppPage({
           Notifications
         </Link>
       </nav>
-      <main className="mx-auto mt-6 max-w-2xl">
-        <VaultClient items={items} nextCursor={nextCursor} type={type} sort={sort} limit={limit} tagIds={tagIds} />
+      <main className="mx-auto mt-6 max-w-2xl overflow-y-auto">
+        <VaultClient
+          items={items}
+          nextCursor={nextCursor}
+          type={type}
+          sort={sort}
+          limit={limit}
+          tagIds={tagIds}
+          inbox={inbox}
+        />
       </main>
     </div>
   );

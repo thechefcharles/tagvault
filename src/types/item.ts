@@ -12,6 +12,7 @@ export type Item = {
   url: string | null;
   storage_path: string | null;
   mime_type: string | null;
+  inbox: boolean;
   created_at: string;
   updated_at: string;
 };
